@@ -1,0 +1,392 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClientServiceRole } from '@/lib/supabase';
+import { z } from 'zod';
+
+const createOrderSchema = z.object({
+   orderNumber: z.string().optional(), // Make optional since we'll auto-generate
+   customerName: z.string().min(1, 'Customer name is required'),
+   customerPhone: z.string().optional(),
+   location: z.string().optional(), // New location field
+   orderDate: z.string().refine((date) => !isNaN(Date.parse(date)), 'Invalid date'),
+   totalAmount: z.number().min(0, 'Total amount must be non-negative'),
+   amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
+   linkedBatchId: z.string().optional(),
+   orderItems: z.array(z.object({
+     productId: z.string().min(1, 'Product ID is required'),
+     qtyCount: z.number().int().min(0),
+     qtyWeight: z.number().min(0),
+     unitPrice: z.number().positive('Unit price must be greater than 0'),
+     priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
+   })),
+ });
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClientServiceRole();
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const batchId = searchParams.get('batchId');
+    const search = searchParams.get('search');
+
+    let query = supabase
+      .from('orders')
+      .select(`
+        *,
+        batches!linked_batch_id (
+          id,
+          name
+        ),
+        order_items (
+          *
+        )
+      `)
+      .order('order_date', { ascending: false });
+
+    if (status) {
+      query = query.eq('payment_status', status);
+    }
+    if (batchId) {
+      query = query.eq('linked_batch_id', batchId);
+    }
+    if (search) {
+      query = query.ilike('customer_name', `%${search}%`);
+    }
+
+    const { data: orders, error } = await query;
+
+    if (error) throw error;
+
+    // Transform to camelCase for frontend
+    const transformedOrders = (orders || []).map((order: any) => ({
+      id: order.id,
+      orderNumber: order.order_number,
+      customerName: order.customer_name,
+      customerPhone: order.customer_phone,
+      location: order.location,
+      orderDate: order.order_date,
+      totalAmount: order.total_amount,
+      amountPaid: order.amount_paid,
+      balanceDue: order.balance_due,
+      paymentStatus: order.payment_status,
+      status: order.status,
+      linkedBatchId: order.linked_batch_id,
+      batchName: order.batches?.name || null,
+      orderItems: (order.order_items || []).map((item: any) => ({
+        id: item.id,
+        productId: item.product_name,
+        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
+        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        unitPrice: item.unit_price,
+        priceMode: item.price_mode,
+      })),
+      createdAt: order.created_at,
+      updatedAt: order.updated_at,
+    }));
+
+    return NextResponse.json(transformedOrders);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  let body;
+  let validatedData;
+  try {
+    body = await request.json();
+    validatedData = createOrderSchema.parse(body);
+
+    // Auto-generate order number if not provided
+    let orderNumber = validatedData.orderNumber;
+    if (!orderNumber) {
+      const supabase = createClientServiceRole();
+
+      // Get today's date in YYYYMMDD format
+      const today = new Date();
+      const dateStr = today.getFullYear().toString() +
+                      (today.getMonth() + 1).toString().padStart(2, '0') +
+                      today.getDate().toString().padStart(2, '0');
+
+      // Find the highest sequence number for today
+      const { data: existingOrders, error: queryError } = await supabase
+        .from('orders')
+        .select('order_number')
+        .like('order_number', `ORD-${dateStr}-%`)
+        .order('order_number', { ascending: false })
+        .limit(1);
+
+      if (queryError) throw queryError;
+
+      let nextSequence = 1;
+      if (existingOrders && existingOrders.length > 0) {
+        const lastOrderNumber = existingOrders[0].order_number;
+        const lastSequence = parseInt(lastOrderNumber.split('-')[2]);
+        nextSequence = lastSequence + 1;
+      }
+
+      // Format as ORD-YYYYMMDD-XXXX
+      orderNumber = `ORD-${dateStr}-${nextSequence.toString().padStart(4, '0')}`;
+    }
+
+    // Calculate payment status
+    let paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID';
+    if (validatedData.amountPaid === 0) {
+      paymentStatus = 'PENDING';
+    } else if (validatedData.amountPaid < validatedData.totalAmount) {
+      paymentStatus = 'PARTIAL';
+    } else {
+      paymentStatus = 'PAID';
+    }
+
+    const supabase = createClientServiceRole();
+
+    // Calculate balance due
+    const balanceDue = validatedData.totalAmount - validatedData.amountPaid;
+
+    // Insert order
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        order_number: orderNumber,
+        customer_name: validatedData.customerName,
+        customer_phone: validatedData.customerPhone,
+        location: validatedData.location || null,
+        order_date: new Date(validatedData.orderDate).toISOString(),
+        total_amount: validatedData.totalAmount,
+        amount_paid: validatedData.amountPaid,
+        balance_due: balanceDue,
+        payment_status: paymentStatus,
+        status: paymentStatus, // Populate the 'status' column as well
+        linked_batch_id: validatedData.linkedBatchId || null,
+      })
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // Insert order items
+    const { computeOrderItemSubtotal } = await import('@/utils/calculations');
+    const orderItemsData = validatedData.orderItems.map(item => {
+      const totalPrice = computeOrderItemSubtotal({
+        qtyCount: item.qtyCount,
+        qtyWeight: item.qtyWeight,
+        unitPrice: item.unitPrice,
+        priceMode: item.priceMode,
+      });
+      const quantity = item.priceMode === 'KG' ? item.qtyWeight : item.qtyCount;
+      return {
+        order_id: order.id,
+        product_name: item.productId,
+        quantity: quantity,
+        unit_price: item.unitPrice,
+        total_price: totalPrice,
+        price_mode: item.priceMode,
+        qty_count: item.qtyCount,
+        qty_weight: item.qtyWeight,
+      };
+    });
+
+    const { error: orderItemsError } = await supabase
+      .from('order_items')
+      .insert(orderItemsData);
+
+    if (orderItemsError) throw orderItemsError;
+
+    // Auto-log transaction for payment
+    if (validatedData.amountPaid > 0) {
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          date: new Date().toISOString(),
+          description: `Order Payment: ${(order as any).order_number} - ${order.customer_name}`,
+          amount: validatedData.amountPaid,
+          type: 'CREDIT',
+          category: 'ORDER',
+          linked_order_id: order.id,
+          linked_batch_id: validatedData.linkedBatchId || null,
+        });
+
+      if (transactionError) throw transactionError;
+    }
+
+    // Deduct from dressed inventory if linked to batch
+    if (validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '') {
+      for (const item of validatedData.orderItems) {
+        const deductCount = (item.priceMode === 'COUNT' || item.priceMode === 'COUNT_KG') ? item.qtyCount : 0;
+        const deductWeight = item.priceMode === 'KG' ? item.qtyWeight : 0;
+
+        if (deductCount > 0 || deductWeight > 0) {
+          // Aggregate inventory for the product type and batch
+          const { data: inventoryList, error: fetchError } = await supabase
+            .from('dressed_inventory')
+            .select('*')
+            .eq('product_type', item.productId)
+            .eq('batch_id', validatedData.linkedBatchId)
+            .order('updated_at', { ascending: false });
+
+          if (fetchError) throw fetchError;
+
+          // Aggregate available inventory from all entries
+          const totalAvailableCount = inventoryList?.reduce((sum, inv) => sum + (inv.available_count || 0), 0) || 0;
+          const totalAvailableWeight = inventoryList?.reduce((sum, inv) => sum + (inv.available_weight_kg || 0), 0) || 0;
+
+          // If no inventory exists, create it with 0 quantity but allow the order to proceed
+          if (totalAvailableCount === 0 && totalAvailableWeight === 0) {
+            console.log(`Creating missing inventory for product ${item.productId} in batch ${validatedData.linkedBatchId}`);
+            const { error: createError } = await supabase
+              .from('dressed_inventory')
+              .insert({
+                product_type: item.productId,
+                batch_id: validatedData.linkedBatchId,
+                available_count: 0,
+                available_weight_kg: 0,
+                unit_price: 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            if (createError) {
+              console.error('Error creating inventory:', createError);
+              // Continue with order creation even if inventory creation fails
+            }
+          }
+
+          // Log inventory status but allow orders to proceed even with insufficient inventory
+          if (deductCount > 0 && totalAvailableCount < deductCount) {
+            console.warn(`Insufficient count inventory for ${item.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}. Order will still be created.`);
+          }
+
+          if (deductWeight > 0 && totalAvailableWeight < deductWeight) {
+            console.warn(`Insufficient weight inventory for ${item.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg. Order will still be created.`);
+          }
+
+          // Deduct from inventory entries, starting from the most recently updated
+          let remainingCountToDeduct = deductCount;
+          let remainingWeightToDeduct = deductWeight;
+
+          for (const inventory of inventoryList || []) {
+            if (remainingCountToDeduct <= 0 && remainingWeightToDeduct <= 0) break;
+
+            const countToDeduct = Math.min(remainingCountToDeduct, inventory.available_count || 0);
+            const weightToDeduct = Math.min(remainingWeightToDeduct, inventory.available_weight_kg || 0);
+
+            if (countToDeduct > 0 || weightToDeduct > 0) {
+              const { error: updateError } = await supabase
+                .from('dressed_inventory')
+                .update({
+                  available_count: (inventory.available_count || 0) - countToDeduct,
+                  available_weight_kg: (inventory.available_weight_kg || 0) - weightToDeduct,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', inventory.id);
+
+              if (updateError) throw updateError;
+
+              remainingCountToDeduct -= countToDeduct;
+              remainingWeightToDeduct -= weightToDeduct;
+            }
+          }
+
+          // If we still have remaining amounts to deduct but no more inventory entries, create a new one
+          if (remainingCountToDeduct > 0 || remainingWeightToDeduct > 0) {
+            console.log(`Creating additional inventory entry for remaining amounts: count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
+            const { error: createError } = await supabase
+              .from('dressed_inventory')
+              .insert({
+                product_type: item.productId,
+                batch_id: validatedData.linkedBatchId,
+                available_count: 0, // Start with 0 and let it go negative through updates
+                available_weight_kg: 0, // Start with 0 and let it go negative through updates
+                unit_price: 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            if (createError) {
+              console.error('Error creating additional inventory:', createError);
+            } else {
+              // Now update it to the correct negative value
+              const { error: updateError } = await supabase
+                .from('dressed_inventory')
+                .update({
+                  available_count: -remainingCountToDeduct,
+                  available_weight_kg: -remainingWeightToDeduct,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('product_type', item.productId)
+                .eq('batch_id', validatedData.linkedBatchId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+              if (updateError) {
+                console.error('Error updating inventory to negative values:', updateError);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Fetch the order with relations
+    const { data: fullOrder, error: fetchError } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        batches!linked_batch_id (
+          id,
+          name
+        ),
+        order_items (
+          *
+        )
+      `)
+      .eq('id', order.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Transform to camelCase for frontend
+    const transformedOrder = {
+      id: fullOrder.id,
+      orderNumber: fullOrder.order_number,
+      customerName: fullOrder.customer_name,
+      customerPhone: fullOrder.customer_phone,
+      location: fullOrder.location,
+      orderDate: fullOrder.order_date,
+      totalAmount: fullOrder.total_amount,
+      amountPaid: fullOrder.amount_paid,
+      balanceDue: fullOrder.balance_due,
+      paymentStatus: fullOrder.payment_status,
+      status: fullOrder.status,
+      linkedBatchId: fullOrder.linked_batch_id,
+      batchName: fullOrder.batches?.name || null,
+      orderItems: (fullOrder.order_items || []).map((item: any) => ({
+        id: item.id,
+        productId: item.product_name,
+        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
+        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        unitPrice: item.unit_price,
+        priceMode: item.price_mode,
+      })),
+      createdAt: fullOrder.created_at,
+      updatedAt: fullOrder.updated_at,
+    };
+
+    return NextResponse.json(transformedOrder, { status: 201 });
+  } catch (error: any) {
+    console.error('=== ORDER CREATION ERROR DEBUG ===');
+    console.error('Error type:', error.constructor?.name || 'Unknown');
+    console.error('Error message:', error.message || 'No message');
+    console.error('Error stack:', error.stack || 'No stack');
+    console.error('Request body:', body || 'No body parsed');
+    console.error('Validated data:', validatedData || 'No validation');
+    console.error('Full error object:', error);
+    console.error('=== END ORDER CREATION ERROR ===');
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+  }
+}
