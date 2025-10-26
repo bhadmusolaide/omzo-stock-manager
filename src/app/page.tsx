@@ -7,6 +7,7 @@ import Table from '@/components/ui/Table';
 import { formatCurrency } from '@/utils/currency';
 import { DollarSign, TrendingUp, TrendingDown, Users, Percent, Package } from 'lucide-react';
 import PendingPaymentsCarousel from '@/components/PendingPaymentsCarousel';
+import AIInsightsWidget from '@/components/AIInsightsWidget';
 
 const transactionColumns = [
   {
@@ -66,55 +67,62 @@ export default function Home() {
       {/* Pending Payments Carousel */}
       <PendingPaymentsCarousel />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <KPICard
-          title="Total Income"
-          value={formatCurrency(metrics?.totalIncome || 0)}
-          icon={DollarSign}
-          color="green"
-        />
-        <KPICard
-          title="Total Expenses"
-          value={formatCurrency(metrics?.totalExpenses || 0)}
-          icon={DollarSign}
-          color="red"
-        />
-        <KPICard
-          title="Current Balance"
-          value={formatCurrency(metrics?.overallProfit || 0)}
-          icon={DollarSign}
-          color={metrics?.overallProfit && metrics.overallProfit >= 0 ? 'green' : 'red'}
-        />
-        <KPICard
-          title="Overall Profit"
-          value={formatCurrency(metrics?.overallProfit || 0)}
-          icon={TrendingUp}
-          color={metrics?.overallProfit && metrics.overallProfit >= 0 ? 'green' : 'red'}
-        />
-        <KPICard
-          title="Feed Inventory"
-          value={`${(metrics?.remainingFeedKg || 0).toFixed(2)} KG remaining (Total: ${(metrics?.totalFeedKg || 0).toFixed(2)}, Assigned: ${(metrics?.assignedFeedKg || 0).toFixed(2)})`}
-          icon={Package}
-          color="blue"
-        />
-        <KPICard
-          title="Active Batches"
-          value={metrics?.batchCount || 0}
-          icon={Package}
-          color="blue"
-        />
-        <KPICard
-          title="Mortality Rate"
-          value={`${(metrics?.mortalityRate || 0).toFixed(2)}%`}
-          icon={TrendingDown}
-          color="red"
-        />
-        <KPICard
-          title="Avg Feed Cost/kg"
-          value={formatCurrency(metrics?.avgFeedCostPerKg || 0)}
-          icon={DollarSign}
-          color="orange"
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <KPICard
+              title="Total Income"
+              value={formatCurrency(metrics?.totalIncome || 0)}
+              icon={DollarSign}
+              color="green"
+            />
+            <KPICard
+              title="Total Expenses"
+              value={formatCurrency(metrics?.totalExpenses || 0)}
+              icon={DollarSign}
+              color="red"
+            />
+            <KPICard
+              title="Current Balance"
+              value={formatCurrency(metrics?.overallProfit || 0)}
+              icon={DollarSign}
+              color={metrics?.overallProfit && metrics.overallProfit >= 0 ? 'green' : 'red'}
+            />
+            <KPICard
+              title="Overall Profit"
+              value={formatCurrency(metrics?.overallProfit || 0)}
+              icon={TrendingUp}
+              color={metrics?.overallProfit && metrics.overallProfit >= 0 ? 'green' : 'red'}
+            />
+            <KPICard
+              title="Feed Inventory"
+              value={`${(metrics?.remainingFeedKg || 0).toFixed(2)} KG remaining (Total: ${(metrics?.totalFeedKg || 0).toFixed(2)}, Assigned: ${(metrics?.assignedFeedKg || 0).toFixed(2)})`}
+              icon={Package}
+              color="blue"
+            />
+            <KPICard
+              title="Active Batches"
+              value={metrics?.batchCount || 0}
+              icon={Package}
+              color="blue"
+            />
+            <KPICard
+              title="Mortality Rate"
+              value={`${(metrics?.mortalityRate || 0).toFixed(2)}%`}
+              icon={TrendingDown}
+              color="red"
+            />
+            <KPICard
+              title="Avg Feed Cost/kg"
+              value={formatCurrency(metrics?.avgFeedCostPerKg || 0)}
+              icon={DollarSign}
+              color="orange"
+            />
+          </div>
+        </div>
+        <div className="lg:col-span-1">
+          <AIInsightsWidget />
+        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">

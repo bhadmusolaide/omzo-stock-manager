@@ -195,7 +195,6 @@ export async function softDeleteBatch(batchId: string, userId?: string) {
       { table: 'feed_purchases', column: 'batch_id', query: supabase.from('feed_purchases').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'feed_usages', column: 'batch_id', query: supabase.from('feed_usages').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'mortality_records', column: 'batch_id', query: supabase.from('mortality_records').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
-      { table: 'processing_outputs', column: 'batch_id', query: supabase.from('processing_outputs').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'expenses', column: 'batch_id', query: supabase.from('expenses').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'transactions', column: 'linked_batch_id', query: supabase.from('transactions').update({ is_deleted: true, updated_by: userId }).eq('linked_batch_id', batchId) },
       { table: 'orders', column: 'linked_batch_id', query: supabase.from('orders').update({ is_deleted: true, updated_by: userId }).eq('linked_batch_id', batchId) },

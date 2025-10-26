@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Phase 9 - AI Automation Layer
+
+This project now includes an AI Automation Layer that provides automated insights and calculations for better farm management decisions. See [AI-AUTOMATION-README.md](AI-AUTOMATION-README.md) for details.
+
 ## Getting Started
 
 First, create a `.env.local` file based on `.env.example` and fill in your Supabase credentials:

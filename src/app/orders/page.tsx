@@ -8,6 +8,7 @@ import Input from "@/components/ui/Input";
 import AddOrderModal from "@/features/orders/components/AddOrderModal";
 import EditOrderModal from "@/features/orders/components/EditOrderModal";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
+import InsightBadges from "@/components/InsightBadges";
 import { useUiStore } from "@/store/ui";
 import { formatCurrency } from "@/utils/currency";
 import { useDeleteOrder } from "@/hooks/useOrders";
@@ -154,6 +155,7 @@ export default function Orders() {
     } },
     { key: "location", header: "Location", render: (value: string | null) => value || 'N/A' },
     { key: "batchName", header: "Batch", render: (value: string | null) => value || 'N/A' },
+    { key: "insights", header: "Insights", render: (_: unknown, row: Order) => <InsightBadges orderId={row.id} /> },
     { key: "actions", header: "Actions", render: (_: unknown, row: Order) => (
       <div className="flex gap-2">
         <Button size="sm" onClick={() => setEditOrder(true, row.id)}>Edit</Button>

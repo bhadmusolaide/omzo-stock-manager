@@ -3,6 +3,7 @@
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import BatchStatusBadge from "@/components/ui/BatchStatusBadge";
+import InsightBadges from "@/components/InsightBadges";
 import Loading from "@/components/ui/Loading";
 import AddBatchModal from "@/features/batches/components/AddBatchModal";
 import EditBatchModal from "@/features/batches/components/EditBatchModal";
@@ -61,6 +62,7 @@ export default function Batches() {
     { key: "effectiveUnitCost", header: "Unit Cost", minWidth: "100px", render: (value: number) => formatCurrency(value) },
     { key: "status", header: "Status", minWidth: "100px", render: (value: string) => <BatchStatusBadge status={value as Batch['status']} /> },
     { key: "startDate", header: "Start Date", minWidth: "100px", render: (value: string) => new Date(value).toLocaleDateString() },
+    { key: "insights", header: "Insights", minWidth: "120px", render: (_: unknown, row: Batch) => <InsightBadges batchId={row.id} /> },
     {
       key: "actions",
       header: "Actions",
