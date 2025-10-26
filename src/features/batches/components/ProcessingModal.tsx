@@ -199,13 +199,13 @@ export default function ProcessingModal({
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
                     <option value="">Select Product Type</option>
-                    <option value="whole">Whole</option>
+                    <option value="Whole">Whole</option>
                     <option value="quarter">Quarter</option>
                     <option value="dogfood_combo">Dog Food Combo</option>
                     <option value="gizzards">Gizzards</option>
                     <option value="liver">Liver</option>
                     <option value="hearts">Hearts</option>
-                    <option value="other">Other</option>
+                    <option value="feet">Feet</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">

@@ -66,7 +66,7 @@ export const useUpdateOrder = () => {
       await queryClient.cancelQueries({ queryKey: ['orders'] });
       const previousOrders = queryClient.getQueryData(['orders']);
       queryClient.setQueryData(['orders'], (old: any) =>
-        old.map((order: any) => order.id === updatedOrder.id ? updatedOrder : order)
+        (old || []).map((order: any) => order.id === updatedOrder.id ? updatedOrder : order)
       );
       return { previousOrders };
     },
@@ -87,7 +87,7 @@ export const useDeleteOrder = () => {
       await queryClient.cancelQueries({ queryKey: ['orders'] });
       const previousOrders = queryClient.getQueryData(['orders']);
       queryClient.setQueryData(['orders'], (old: any) =>
-        old.filter((order: any) => order.id !== deletedId)
+        (old || []).filter((order: any) => order.id !== deletedId)
       );
       return { previousOrders };
     },

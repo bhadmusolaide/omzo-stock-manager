@@ -43,17 +43,20 @@ interface Batch {
   name: string;
 }
 
-const products = [
-  { id: '1', name: 'Whole Chicken' },
-  { id: '2', name: 'Quarter Cuts' },
-  { id: '3', name: 'Dog Food' },
-  { id: '4', name: 'Neck' },
-  { id: '5', name: 'Feet' },
-  { id: '6', name: 'Gizzards' },
-];
+interface DressedInventoryItem {
+  id: string;
+  productType: string;
+  batchId: string | null;
+  batchName: string;
+  availableCount: number;
+  availableWeightKg: number;
+  unitPrice: number;
+}
 
 export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderModalProps) {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [products, setProducts] = useState<DressedInventoryItem[]>([]);
+  const [batchInventory, setBatchInventory] = useState<Record<string, DressedInventoryItem[]>>({});
   const createOrder = useCreateOrder();
 
   const {
@@ -77,6 +80,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
   });
 
   const orderItems = watch('orderItems');
+  const linkedBatchId = watch('linkedBatchId');
   const totalAmount = orderItems.reduce((sum, item) => {
     const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
                     item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
@@ -90,12 +94,46 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
 
   useEffect(() => {
     if (isOpen) {
+      // Fetch batches
       fetch('/api/batches')
         .then((response) => response.json())
         .then((data) => setBatches(Array.isArray(data) ? data : []))
         .catch((error) => console.error('Error fetching batches:', error));
+      
+      // Fetch dressed inventory products
+      fetch('/api/dressed_inventory')
+        .then((response) => response.json())
+        .then((data: DressedInventoryItem[]) => {
+          // Create unique product list based on productType
+          const uniqueProducts = Array.from(
+            new Map(data.map((item) => [item.productType, item])).values()
+          );
+          setProducts(uniqueProducts);
+        })
+        .catch((error) => console.error('Error fetching products:', error));
     }
   }, [isOpen]);
+
+  // Fetch batch-specific inventory when a batch is selected
+  useEffect(() => {
+    if (linkedBatchId) {
+      fetch(`/api/dressed_inventory?batchId=${linkedBatchId}`)
+        .then((response) => response.json())
+        .then((data) => {
+          setBatchInventory(prev => ({
+            ...prev,
+            [linkedBatchId]: data
+          }));
+        })
+        .catch((error) => console.error('Error fetching batch inventory:', error));
+    }
+  }, [linkedBatchId]);
+
+  const getInventoryForProduct = (productType: string) => {
+    if (!linkedBatchId) return null;
+    const batchItems = batchInventory[linkedBatchId] || [];
+    return batchItems.find(item => item.productType === productType) || null;
+  };
 
   const onSubmit = async (data: OrderFormData) => {
     try {
@@ -155,84 +193,94 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
         {/* Order Items */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Order Items</label>
-          {fields.map((field, index) => (
-            <div key={field.id} className="border p-4 rounded mb-2">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Product</label>
-                  <select
-                    {...register(`orderItems.${index}.productId`)}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
+          {fields.map((field, index) => {
+            const selectedProductType = orderItems[index]?.productId;
+            const inventory = selectedProductType ? getInventoryForProduct(selectedProductType) : null;
+            
+            return (
+              <div key={field.id} className="border p-4 rounded mb-2">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Product</label>
+                    <select
+                      {...register(`orderItems.${index}.productId`)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
+                    >
+                      <option value="">Select product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.productType}>
+                          {product.productType}
+                        </option>
+                      ))}
+                    </select>
+                    {inventory && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        Available: {inventory.availableCount} count, {inventory.availableWeightKg.toFixed(2)} kg
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Qty Count</label>
+                    <input
+                      type="number"
+                      {...register(`orderItems.${index}.qtyCount`, { valueAsNumber: true })}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Qty Weight</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      {...register(`orderItems.${index}.qtyWeight`, { valueAsNumber: true })}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      {...register(`orderItems.${index}.unitPrice`, { valueAsNumber: true })}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Price Mode</label>
+                    <select
+                      {...register(`orderItems.${index}.priceMode`)}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
+                    >
+                      <option value="COUNT">Count</option>
+                      <option value="KG">KG</option>
+                      <option value="COUNT_KG">Count+KG</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Subtotal</label>
+                  <p className="text-sm font-semibold">
+                    {formatCurrency(
+                      orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
+                      orderItems[index]?.priceMode === 'KG' ? (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0) :
+                      (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0)
+                    )}
+                  </p>
+                </div>
+                {fields.length > 1 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => remove(index)}
+                    className="mt-2"
                   >
-                    <option value="">Select product</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Qty Count</label>
-                  <input
-                    type="number"
-                    {...register(`orderItems.${index}.qtyCount`, { valueAsNumber: true })}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Qty Weight</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register(`orderItems.${index}.qtyWeight`, { valueAsNumber: true })}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register(`orderItems.${index}.unitPrice`, { valueAsNumber: true })}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Price Mode</label>
-                  <select
-                    {...register(`orderItems.${index}.priceMode`)}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
-                  >
-                    <option value="COUNT">Count</option>
-                    <option value="KG">KG</option>
-                    <option value="COUNT_KG">Count+KG</option>
-                  </select>
-                </div>
+                    Remove
+                  </Button>
+                )}
               </div>
-              <div className="mt-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Subtotal</label>
-                <p className="text-sm font-semibold">
-                  {formatCurrency(
-                    orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
-                    orderItems[index]?.priceMode === 'KG' ? (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0) :
-                    (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0)
-                  )}
-                </p>
-              </div>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => remove(index)}
-                  className="mt-2"
-                >
-                  Remove
-                </Button>
-              )}
-            </div>
-          ))}
+            );
+          })}
           <Button
             type="button"
             size="sm"
@@ -282,4 +330,3 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
     </Modal>
   );
 }
-

@@ -231,34 +231,13 @@ export async function POST(request: NextRequest) {
           const totalAvailableCount = inventoryList?.reduce((sum, inv) => sum + (inv.available_count || 0), 0) || 0;
           const totalAvailableWeight = inventoryList?.reduce((sum, inv) => sum + (inv.available_weight_kg || 0), 0) || 0;
 
-          // If no inventory exists, create it with 0 quantity but allow the order to proceed
-          if (totalAvailableCount === 0 && totalAvailableWeight === 0) {
-            console.log(`Creating missing inventory for product ${item.productId} in batch ${validatedData.linkedBatchId}`);
-            const { error: createError } = await supabase
-              .from('dressed_inventory')
-              .insert({
-                product_type: item.productId,
-                batch_id: validatedData.linkedBatchId,
-                available_count: 0,
-                available_weight_kg: 0,
-                unit_price: 0,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              });
-
-            if (createError) {
-              console.error('Error creating inventory:', createError);
-              // Continue with order creation even if inventory creation fails
-            }
-          }
-
-          // Log inventory status but allow orders to proceed even with insufficient inventory
+          // Implement strict inventory validation
           if (deductCount > 0 && totalAvailableCount < deductCount) {
-            console.warn(`Insufficient count inventory for ${item.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}. Order will still be created.`);
+            return NextResponse.json({ error: `Insufficient count inventory for ${item.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}.` }, { status: 400 });
           }
 
           if (deductWeight > 0 && totalAvailableWeight < deductWeight) {
-            console.warn(`Insufficient weight inventory for ${item.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg. Order will still be created.`);
+            return NextResponse.json({ error: `Insufficient weight inventory for ${item.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg.` }, { status: 400 });
           }
 
           // Deduct from inventory entries, starting from the most recently updated
@@ -288,41 +267,11 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // If we still have remaining amounts to deduct but no more inventory entries, create a new one
+          // If there's still remaining to deduct, it means we have a logic error since we already validated
+          // This should never happen with proper validation, but let's add a safeguard
           if (remainingCountToDeduct > 0 || remainingWeightToDeduct > 0) {
-            console.log(`Creating additional inventory entry for remaining amounts: count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
-            const { error: createError } = await supabase
-              .from('dressed_inventory')
-              .insert({
-                product_type: item.productId,
-                batch_id: validatedData.linkedBatchId,
-                available_count: 0, // Start with 0 and let it go negative through updates
-                available_weight_kg: 0, // Start with 0 and let it go negative through updates
-                unit_price: 0,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              });
-
-            if (createError) {
-              console.error('Error creating additional inventory:', createError);
-            } else {
-              // Now update it to the correct negative value
-              const { error: updateError } = await supabase
-                .from('dressed_inventory')
-                .update({
-                  available_count: -remainingCountToDeduct,
-                  available_weight_kg: -remainingWeightToDeduct,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('product_type', item.productId)
-                .eq('batch_id', validatedData.linkedBatchId)
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-              if (updateError) {
-                console.error('Error updating inventory to negative values:', updateError);
-              }
-            }
+            console.error(`Logic error: Still have remaining amounts to deduct after processing all inventory: count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
+            return NextResponse.json({ error: `Internal error: Insufficient inventory for ${item.productId} despite passing validation.` }, { status: 500 });
           }
         }
       }
@@ -363,7 +312,7 @@ export async function POST(request: NextRequest) {
       batchName: fullOrder.batches?.name || null,
       orderItems: (fullOrder.order_items || []).map((item: any) => ({
         id: item.id,
-        productId: item.product_name,
+        productId: item.product_name, // Fixed: Use product_name instead of product_id
         qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
         qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
         unitPrice: item.unit_price,

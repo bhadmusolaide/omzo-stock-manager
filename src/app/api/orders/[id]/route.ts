@@ -63,8 +63,8 @@ export async function GET(
       orderItems: (order.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
-        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        qtyCount: item.price_mode === 'KG' ? 0 : item.qty_count,
+        qtyWeight: item.price_mode === 'KG' ? item.qty_weight : 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),
@@ -152,6 +152,139 @@ export async function PATCH(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    // Handle inventory adjustments for order items if they changed
+    if (validatedData.orderItems && validatedData.linkedBatchId) {
+      // First, we need to restore the inventory from the old order items
+      // Then deduct inventory for the new order items
+      
+      // Restore inventory from old order items
+      for (const oldItem of currentOrder.order_items || []) {
+        const restoreCount = (oldItem.price_mode === 'COUNT' || oldItem.price_mode === 'COUNT_KG') ? oldItem.quantity : 0;
+        const restoreWeight = oldItem.price_mode === 'KG' ? oldItem.quantity : 0;
+        
+        if (restoreCount > 0 || restoreWeight > 0) {
+          // Find existing inventory entries for this product and batch
+          const { data: inventoryList, error: fetchError } = await supabase
+            .from('dressed_inventory')
+            .select('*')
+            .eq('product_type', oldItem.product_name)
+            .eq('batch_id', validatedData.linkedBatchId)
+            .order('updated_at', { ascending: false });
+
+          if (fetchError) {
+            console.error('Error fetching inventory for restoration:', fetchError);
+            return NextResponse.json({ error: fetchError.message }, { status: 500 });
+          }
+
+          // Create a new inventory entry if none exists
+          if (!inventoryList || inventoryList.length === 0) {
+            const { error: createError } = await supabase
+              .from('dressed_inventory')
+              .insert({
+                product_type: oldItem.product_name,
+                batch_id: validatedData.linkedBatchId,
+                available_count: restoreCount,
+                available_weight_kg: restoreWeight,
+                unit_price: oldItem.unit_price || 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            if (createError) {
+              console.error('Error creating inventory entry for restoration:', createError);
+              return NextResponse.json({ error: createError.message }, { status: 500 });
+            }
+          } else {
+            // Add back to the most recent inventory entry
+            const latestInventory = inventoryList[0];
+            const { error: updateError } = await supabase
+              .from('dressed_inventory')
+              .update({
+                available_count: (latestInventory.available_count || 0) + restoreCount,
+                available_weight_kg: (latestInventory.available_weight_kg || 0) + restoreWeight,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', latestInventory.id);
+
+            if (updateError) {
+              console.error('Error updating inventory for restoration:', updateError);
+              return NextResponse.json({ error: updateError.message }, { status: 500 });
+            }
+          }
+        }
+      }
+
+      // Now deduct inventory for new order items
+      for (const newItem of validatedData.orderItems) {
+        const deductCount = (newItem.priceMode === 'COUNT' || newItem.priceMode === 'COUNT_KG') ? newItem.qtyCount : 0;
+        const deductWeight = newItem.priceMode === 'KG' ? newItem.qtyWeight : 0;
+
+        if (deductCount > 0 || deductWeight > 0) {
+          // Aggregate inventory for the product type and batch
+          const { data: inventoryList, error: fetchError } = await supabase
+            .from('dressed_inventory')
+            .select('*')
+            .eq('product_type', newItem.productId)
+            .eq('batch_id', validatedData.linkedBatchId)
+            .order('updated_at', { ascending: false });
+
+          if (fetchError) {
+            console.error('Error fetching inventory for deduction:', fetchError);
+            return NextResponse.json({ error: fetchError.message }, { status: 500 });
+          }
+
+          // Aggregate available inventory from all entries
+          const totalAvailableCount = inventoryList?.reduce((sum, inv) => sum + (inv.available_count || 0), 0) || 0;
+          const totalAvailableWeight = inventoryList?.reduce((sum, inv) => sum + (inv.available_weight_kg || 0), 0) || 0;
+
+          // Implement strict inventory validation
+          if (deductCount > 0 && totalAvailableCount < deductCount) {
+            return NextResponse.json({ error: `Insufficient count inventory for ${newItem.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}.` }, { status: 400 });
+          }
+
+          if (deductWeight > 0 && totalAvailableWeight < deductWeight) {
+            return NextResponse.json({ error: `Insufficient weight inventory for ${newItem.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg.` }, { status: 400 });
+          }
+
+          // Deduct from inventory entries, starting from the most recently updated
+          let remainingCountToDeduct = deductCount;
+          let remainingWeightToDeduct = deductWeight;
+
+          for (const inventory of inventoryList || []) {
+            if (remainingCountToDeduct <= 0 && remainingWeightToDeduct <= 0) break;
+
+            const countToDeduct = Math.min(remainingCountToDeduct, inventory.available_count || 0);
+            const weightToDeduct = Math.min(remainingWeightToDeduct, inventory.available_weight_kg || 0);
+
+            if (countToDeduct > 0 || weightToDeduct > 0) {
+              const { error: updateError } = await supabase
+                .from('dressed_inventory')
+                .update({
+                  available_count: (inventory.available_count || 0) - countToDeduct,
+                  available_weight_kg: (inventory.available_weight_kg || 0) - weightToDeduct,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', inventory.id);
+
+              if (updateError) {
+                console.error('Error updating inventory for deduction:', updateError);
+                return NextResponse.json({ error: updateError.message }, { status: 500 });
+              }
+
+              remainingCountToDeduct -= countToDeduct;
+              remainingWeightToDeduct -= weightToDeduct;
+            }
+          }
+
+          // If there's still remaining to deduct, it means we have a logic error since we already validated
+          if (remainingCountToDeduct > 0 || remainingWeightToDeduct > 0) {
+            console.error(`Logic error: Still have remaining amounts to deduct after processing all inventory: count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
+            return NextResponse.json({ error: `Internal error: Insufficient inventory for ${newItem.productId} despite passing validation.` }, { status: 500 });
+          }
+        }
+      }
+    }
+
     // Update orderItems if provided
     if (validatedData.orderItems) {
       // Delete existing items
@@ -171,43 +304,15 @@ export async function PATCH(
             quantity: quantity,
             unit_price: item.unitPrice,
             total_price: totalPrice,
+            price_mode: item.priceMode,
+            qty_count: item.qtyCount,
+            qty_weight: item.qtyWeight,
           };
         })
       );
       if (createError) {
         console.error('Error creating order items:', createError);
         return NextResponse.json({ error: createError.message }, { status: 500 });
-      }
-    }
-
-    // Adjust inventory if linkedBatchId and orderItems changed
-    if (currentOrder.linked_batch_id && validatedData.orderItems) {
-      const oldCount = (currentOrder.order_items || [])
-        .reduce((sum: number, it: any) => sum + (it.quantity || 0), 0);
-      const newCount = validatedData.orderItems
-        .filter(it => it.priceMode === 'COUNT' || it.priceMode === 'COUNT_KG')
-        .reduce((sum, it) => sum + it.qtyCount, 0);
-      const netChange = oldCount - newCount; // add back old, subtract new
-      if (netChange !== 0) {
-        const { data: batchRow2, error: batchFetchError2 } = await supabase
-          .from('batches')
-          .select('current_live')
-          .eq('id', currentOrder.linked_batch_id)
-          .single();
-        if (batchFetchError2) {
-          console.error('Error fetching batch for inventory adjust:', batchFetchError2);
-          return NextResponse.json({ error: batchFetchError2.message }, { status: 500 });
-        }
-        const currentLive2 = batchRow2?.current_live ?? 0;
-        const newLive2 = Math.max(0, currentLive2 + netChange);
-        const { error: batchUpdateError2 } = await supabase
-          .from('batches')
-          .update({ current_live: newLive2 })
-          .eq('id', currentOrder.linked_batch_id);
-        if (batchUpdateError2) {
-          console.error('Error updating batch inventory:', batchUpdateError2);
-          return NextResponse.json({ error: batchUpdateError2.message }, { status: 500 });
-        }
       }
     }
 
@@ -262,8 +367,8 @@ export async function PATCH(
       orderItems: (finalOrder.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
-        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        qtyCount: item.price_mode === 'KG' ? 0 : item.qty_count,
+        qtyWeight: item.price_mode === 'KG' ? item.qty_weight : 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),
