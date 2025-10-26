@@ -6,6 +6,7 @@ import { KPICard } from '@/components/common/KPICard';
 import Table from '@/components/ui/Table';
 import { formatCurrency } from '@/utils/currency';
 import { DollarSign, TrendingUp, TrendingDown, Users, Percent, Package } from 'lucide-react';
+import PendingPaymentsCarousel from '@/components/PendingPaymentsCarousel';
 
 const transactionColumns = [
   {
@@ -34,10 +35,10 @@ export default function Home() {
 
   if (metricsLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
         <p className="mb-6">Welcome to the Farm Stock Management System.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {Array.from({ length: 8 }).map((_, i) => (
             <KPICard key={i} title="" value="" loading={true} />
           ))}
@@ -58,11 +59,14 @@ export default function Home() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6">
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
       <p className="mb-6">Welcome to the Farm Stock Management System.</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {/* Pending Payments Carousel */}
+      <PendingPaymentsCarousel />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <KPICard
           title="Total Income"
           value={formatCurrency(metrics?.totalIncome || 0)}
@@ -125,7 +129,9 @@ export default function Home() {
             </div>
           </div>
         ) : recentTransactions.length > 0 ? (
-          <Table columns={transactionColumns} data={recentTransactions} />
+          <div className="overflow-x-auto">
+            <Table columns={transactionColumns} data={recentTransactions} />
+          </div>
         ) : (
           <p className="text-gray-500 dark:text-gray-400">No recent transactions.</p>
         )}
