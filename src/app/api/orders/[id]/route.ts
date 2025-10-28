@@ -55,7 +55,7 @@ export async function GET(
       orderDate: order.order_date,
       totalAmount: order.total_amount,
       amountPaid: order.amount_paid,
-      balanceDue: order.balance_due,
+      balanceDue: Math.max(0, order.total_amount - order.amount_paid),
       paymentStatus: order.payment_status,
       status: order.status,
       linkedBatchId: order.linked_batch_id,
@@ -63,8 +63,8 @@ export async function GET(
       orderItems: (order.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: item.price_mode === 'KG' ? 0 : item.qty_count,
-        qtyWeight: item.price_mode === 'KG' ? item.qty_weight : 0,
+        qtyCount: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_count : 0,
+        qtyWeight: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_weight : 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),
@@ -131,14 +131,14 @@ export async function PATCH(
     // Update order (map to snake_case)
     const updateData: any = {
       total_amount: newTotalAmount,
+      amount_paid: validatedData.amountPaid !== undefined ? validatedData.amountPaid : currentOrder.amount_paid,
+      balance_due: Math.max(0, newTotalAmount - (validatedData.amountPaid !== undefined ? validatedData.amountPaid : currentOrder.amount_paid)),
       payment_status: paymentStatus,
     };
     if (validatedData.orderNumber !== undefined) updateData.order_number = validatedData.orderNumber;
     if (validatedData.customerName !== undefined) updateData.customer_name = validatedData.customerName;
     if (validatedData.customerPhone !== undefined) updateData.customer_phone = validatedData.customerPhone;
     if (validatedData.orderDate !== undefined) updateData.order_date = new Date(validatedData.orderDate).toISOString();
-    if (validatedData.totalAmount !== undefined) updateData.total_amount = validatedData.totalAmount;
-    if (validatedData.amountPaid !== undefined) updateData.amount_paid = validatedData.amountPaid;
     if (validatedData.linkedBatchId !== undefined) updateData.linked_batch_id = validatedData.linkedBatchId;
 
     const { data: updatedOrderBase, error: updateError } = await supabase
@@ -359,7 +359,7 @@ export async function PATCH(
       orderDate: finalOrder.order_date,
       totalAmount: finalOrder.total_amount,
       amountPaid: finalOrder.amount_paid,
-      balanceDue: finalOrder.balance_due,
+      balanceDue: Math.max(0, finalOrder.total_amount - finalOrder.amount_paid),
       paymentStatus: finalOrder.payment_status,
       status: finalOrder.status,
       linkedBatchId: finalOrder.linked_batch_id,
@@ -367,8 +367,8 @@ export async function PATCH(
       orderItems: (finalOrder.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: item.price_mode === 'KG' ? 0 : item.qty_count,
-        qtyWeight: item.price_mode === 'KG' ? item.qty_weight : 0,
+        qtyCount: (item.price_mode === 'COUNT' || item.price_mode === 'COUNT_KG') ? item.qty_count : 0,
+        qtyWeight: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_weight : 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),

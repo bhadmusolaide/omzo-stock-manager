@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
           *
         )
       `)
-      .order('order_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (status) {
       query = query.eq('payment_status', status);

@@ -37,12 +37,26 @@ interface ProcessingModalProps {
   lastAvgWeightKg?: number;
 }
 
-const DRESSING_PRESETS = {
-  whole: { percentage: 0.70, productType: 'whole' },
-  quarter: { percentage: 0.20, productType: 'quarter' },
-  combo: { percentage: 0.10, productType: 'dogfood_combo' },
-  // Add more as needed
-};
+interface DressedInventoryItem {
+  id: string;
+  productType: string;
+  batchId: string | null;
+  batchName: string;
+  availableCount: number;
+  availableWeightKg: number;
+  unitPrice: number;
+  createdAt: string;
+  updatedAt: string;
+  lowStock: boolean;
+}
+
+// Remove hardcoded presets
+// const DRESSING_PRESETS = {
+//   whole: { percentage: 0.70, productType: 'whole' },
+//   quarter: { percentage: 0.20, productType: 'quarter' },
+//   combo: { percentage: 0.10, productType: 'dogfood_combo' },
+//   // Add more as needed
+// };
 
 export default function ProcessingModal({
   isOpen,
@@ -56,6 +70,7 @@ export default function ProcessingModal({
   lastAvgWeightKg = 0,
 }: ProcessingModalProps) {
   const [preview, setPreview] = useState<any>(null);
+  const [productTypes, setProductTypes] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   const {
@@ -70,7 +85,7 @@ export default function ProcessingModal({
     defaultValues: {
       liveBirdsProcessed: 1,
       avgLiveWeightKg: lastAvgWeightKg,
-      yieldMap: [{ productType: 'whole', unitCount: 1, totalWeightKg: 1.5 }],
+      yieldMap: [{ productType: '', unitCount: 1, totalWeightKg: 1.5 }],
     },
   });
 
@@ -86,13 +101,41 @@ export default function ProcessingModal({
   const totalLiveWeightForProcessing = watchedLiveBirds * watchedAvgLiveWeight;
   const totalDressedWeightKg = watchedYieldMap.reduce((sum, item) => sum + item.totalWeightKg, 0);
 
+  // Fetch product types from dressed inventory
   useEffect(() => {
-    // Auto-suggest yields based on presets
-    if (watchedLiveBirds > 0 && totalDressedWeightKg === 0) {
-      const suggestedYield = Object.entries(DRESSING_PRESETS).map(([key, preset]) => ({
-        productType: preset.productType,
-        unitCount: Math.floor(watchedLiveBirds * 1), // Assume 1 unit per bird for simplicity
-        totalWeightKg: watchedLiveBirds * watchedAvgLiveWeight * preset.percentage,
+    const fetchProductTypes = async () => {
+      try {
+        const response = await fetch('/api/dressed_inventory');
+        if (response.ok) {
+          const data: DressedInventoryItem[] = await response.json();
+          // Extract unique product types
+          const uniqueProductTypes = Array.from(new Set(data.map(item => item.productType)));
+          setProductTypes(uniqueProductTypes);
+          
+          // Set default product type to first available if exists
+          if (uniqueProductTypes.length > 0 && fields.length > 0) {
+            setValue(`yieldMap.0.productType`, uniqueProductTypes[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching product types:', error);
+        // Fallback to hardcoded values if API fails
+        setProductTypes(['whole', 'quarter', 'dogfood_combo', 'gizzards', 'liver', 'hearts', 'feet']);
+      }
+    };
+
+    if (isOpen) {
+      fetchProductTypes();
+    }
+  }, [isOpen, fields.length, setValue]);
+
+  useEffect(() => {
+    // Auto-suggest yields based on presets (simplified)
+    if (watchedLiveBirds > 0 && totalDressedWeightKg === 0 && productTypes.length > 0) {
+      const suggestedYield = productTypes.slice(0, 3).map((type, index) => ({
+        productType: type,
+        unitCount: Math.floor(watchedLiveBirds * (1 / (index + 1))), // Simple distribution
+        totalWeightKg: watchedLiveBirds * watchedAvgLiveWeight * (0.7 - (index * 0.2)),
       }));
       setValue('yieldMap', suggestedYield);
     }
@@ -124,7 +167,7 @@ export default function ProcessingModal({
         unitPrice: costPerDressedKg,
       })),
     });
-  }, [watchedLiveBirds, watchedAvgLiveWeight, watchedYieldMap, allocationMode, totalBatchCost, survivingBirds, lastAvgWeightKg, setValue]);
+  }, [watchedLiveBirds, watchedAvgLiveWeight, watchedYieldMap, allocationMode, totalBatchCost, survivingBirds, lastAvgWeightKg, setValue, productTypes]);
 
   const onSubmit = async (data: ProcessingFormData) => {
     try {
@@ -148,7 +191,7 @@ export default function ProcessingModal({
   };
 
   const addYieldItem = () => {
-    append({ productType: '', unitCount: 0, totalWeightKg: 0 });
+    append({ productType: productTypes[0] || '', unitCount: 0, totalWeightKg: 0 });
   };
 
   const updateYieldItem = (index: number, field: 'productType' | 'unitCount' | 'totalWeightKg', value: string | number) => {
@@ -199,13 +242,11 @@ export default function ProcessingModal({
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
                     <option value="">Select Product Type</option>
-                    <option value="Whole">Whole</option>
-                    <option value="quarter">Quarter</option>
-                    <option value="dogfood_combo">Dog Food Combo</option>
-                    <option value="gizzards">Gizzards</option>
-                    <option value="liver">Liver</option>
-                    <option value="hearts">Hearts</option>
-                    <option value="feet">Feet</option>
+                    {productTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">

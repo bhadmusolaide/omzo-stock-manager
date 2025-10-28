@@ -60,6 +60,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const [products, setProducts] = useState<DressedInventoryItem[]>([]);
   const [batchInventory, setBatchInventory] = useState<Record<string, DressedInventoryItem[]>>({});
   const [orderData, setOrderData] = useState<any>(null);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const updateOrder = useUpdateOrder();
 
   const {
@@ -71,6 +72,10 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
     watch,
   } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
+    defaultValues: {
+      orderItems: [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }],
+      amountPaid: 0,
+    },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -78,21 +83,26 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
     name: 'orderItems',
   });
 
-  const orderItems = watch('orderItems');
+  const orderItems = watch('orderItems') || [];
   const linkedBatchId = watch('linkedBatchId');
   const totalAmount = (orderItems || []).reduce((sum, item) => {
-    const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
-                      item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
-                      item.qtyWeight * item.unitPrice;
+    const subtotal = item.priceMode === 'COUNT' ? (item.qtyCount || 0) * (item.unitPrice || 0) :
+                      item.priceMode === 'KG' ? (item.qtyWeight || 0) * (item.unitPrice || 0) :
+                      (item.qtyWeight || 0) * (item.unitPrice || 0);
     return sum + subtotal;
   }, 0);
 
   const amountPaid = watch('amountPaid') || 0;
   const paymentStatus = amountPaid === 0 ? 'PENDING' :
                        amountPaid < totalAmount ? 'PARTIAL' : 'PAID';
+  const balanceDue = Math.max(0, totalAmount - amountPaid);
 
   useEffect(() => {
     if (isOpen) {
+      // Reset loading state
+      setIsDataLoaded(false);
+      setOrderData(null);
+      
       // Fetch batches
       fetch('/api/batches')
         .then((response) => response.json())
@@ -110,42 +120,50 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
           setProducts(uniqueProducts);
         })
         .catch((error) => console.error('Error fetching products:', error));
-
-      if (orderId) {
-        fetch(`/api/orders/${orderId}`)
-          .then((response) => response.json())
-          .then((data) => {
-            console.log('EditOrderModal received data:', data);
-            if (!data) {
-              console.error('No order data received');
-              return;
-            }
-            setOrderData(data);
-            reset({
-              orderNumber: data.orderNumber || '',
-              customerName: data.customerName || '',
-              customerPhone: data.customerPhone || '',
-              location: data.location || '',
-              orderDate: data.orderDate ? data.orderDate.split('T')[0] : '',
-              totalAmount: data.totalAmount || 0,
-              amountPaid: data.amountPaid || 0,
-              linkedBatchId: data.linkedBatchId || '',
-              orderItems: (data.orderItems && data.orderItems.length > 0)
-                ? data.orderItems.map((item: any) => ({
-                    id: item.id,
-                    productId: item.productId || '',
-                    qtyCount: item.qtyCount || 0,
-                    qtyWeight: item.qtyWeight || 0,
-                    unitPrice: item.unitPrice || 0,
-                    priceMode: item.priceMode || 'COUNT',
-                  }))
-                : [{ productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }],
-            });
-          })
-          .catch((error) => console.error('Error fetching order:', error));
-      }
     }
-  }, [isOpen, orderId, reset]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    // Check if both products and orderId are available
+    if (isOpen && orderId && products.length > 0) {
+      fetch(`/api/orders/${orderId}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data) {
+            console.error('No order data received');
+            return;
+          }
+          setOrderData(data);
+          setIsDataLoaded(true);
+
+          // Prepare order items with proper default values
+          const preparedOrderItems = (data.orderItems && data.orderItems.length > 0)
+            ? data.orderItems.map((item: any) => ({
+                id: item.id || '',
+                // Use product_name as productId since that's what's stored in the database
+                productId: item.productId || item.product_name || '',
+                qtyCount: item.qtyCount !== undefined ? item.qtyCount : 0,
+                qtyWeight: item.qtyWeight !== undefined ? item.qtyWeight : 0,
+                unitPrice: item.unitPrice || 0,
+                priceMode: item.priceMode || 'COUNT',
+              }))
+            : [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }];
+          
+          reset({
+            orderNumber: data.orderNumber || '',
+            customerName: data.customerName || '',
+            customerPhone: data.customerPhone || '',
+            location: data.location || '',
+            orderDate: data.orderDate ? data.orderDate.split('T')[0] : '',
+            totalAmount: data.totalAmount || 0,
+            amountPaid: data.amountPaid || 0,
+            linkedBatchId: data.linkedBatchId || '',
+            orderItems: preparedOrderItems,
+          });
+        })
+        .catch((error) => console.error('Error fetching order:', error));
+    }
+  }, [isOpen, orderId, reset, products]);
 
   // Fetch batch-specific inventory when a batch is selected
   useEffect(() => {
@@ -180,7 +198,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
     }
   };
 
-  if (!orderData) return null;
+  if (!orderData || !isDataLoaded) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Order">
@@ -191,7 +209,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
             {...register('orderNumber')}
             error={errors.orderNumber?.message}
             readOnly
-            className="bg-gray-100 cursor-not-allowed"
+            className="bg-[#1e293b] text-[#f1f5f9] cursor-not-allowed"
           />
           <Input
             label="Customer Name"
@@ -248,7 +266,10 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
                     >
                       <option value="">Select product</option>
                       {products.map((product) => (
-                        <option key={product.id} value={product.productType}>
+                        <option
+                          key={product.id}
+                          value={product.productType}
+                        >
                           {product.productType}
                         </option>
                       ))}
@@ -330,7 +351,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
             label="Amount Paid"
             type="number"
@@ -347,6 +368,13 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
               'text-red-600'
             }`}>
               {paymentStatus}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Balance Due</label>
+            <p className="text-sm font-medium text-red-600">
+              {formatCurrency(balanceDue)}
             </p>
           </div>
         </div>

@@ -108,9 +108,9 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
               orderItems: data.orderItems.map((item: any) => ({
                 id: item.id,
                 productId: item.productId,
-                qtyCount: item.qtyCount ?? 0,
-                qtyWeight: item.qtyWeight ?? 0,
-                unitPrice: item.unitPrice ?? 0,
+                qtyCount: Number(item.qtyCount) || 0,
+                qtyWeight: Number(item.qtyWeight) || Number(item.weightKg) || 0,
+                unitPrice: Number(item.unitPrice) || 0,
                 priceMode: item.priceMode,
               })),
             });
