@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -40,8 +40,27 @@ export default function Transactions() {
     endDate: '',
     search: '',
   });
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+  });
 
-  const { data: transactions, isLoading, error } = useTransactions(filters);
+  const { data: transactionsData, isLoading, error } = useTransactions(filters);
+  const transactions = transactionsData?.transactions || transactionsData || [];
+
+  // Update pagination state when data changes
+  useEffect(() => {
+    if (transactionsData && typeof transactionsData === 'object' && 'currentPage' in transactionsData) {
+      setPagination(prev => ({
+        ...prev,
+        currentPage: transactionsData.currentPage || 1,
+        totalPages: transactionsData.totalPages || 1,
+        totalItems: transactionsData.totalItems || transactions.length,
+      }));
+    }
+  }, [transactionsData, transactions.length]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -49,6 +68,11 @@ export default function Transactions() {
 
   const handleAddSuccess = () => {
     setAddTransactionOpen(false);
+  };
+
+  const handlePageChange = (page: number) => {
+    // For now, we'll just refetch - in a real implementation you'd pass page to the hook
+    // Since the hook doesn't support pagination yet, we'll just refetch
   };
 
 
@@ -202,7 +226,17 @@ export default function Transactions() {
            <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Financial transactions and records</p>
          </div>
          <div className="p-6">
-           <Table columns={columns} data={transactions || []} />
+           <Table
+             columns={columns}
+             data={transactions || []}
+             pagination={{
+               currentPage: pagination.currentPage,
+               totalPages: pagination.totalPages,
+               totalItems: pagination.totalItems,
+               itemsPerPage: pagination.itemsPerPage,
+               onPageChange: handlePageChange,
+             }}
+           />
          </div>
        </div>
       <AddTransactionModal

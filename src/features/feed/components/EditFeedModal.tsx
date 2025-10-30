@@ -76,7 +76,10 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
     if (isOpen) {
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(Array.isArray(data) ? data : []))
+        .then((data) => {
+          const batchesArray = data.batches || data;
+          setBatches(Array.isArray(batchesArray) ? batchesArray : []);
+        })
         .catch((error) => console.error('Error fetching batches:', error));
     }
   }, [isOpen]);

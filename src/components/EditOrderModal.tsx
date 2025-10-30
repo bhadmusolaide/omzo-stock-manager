@@ -44,17 +44,22 @@ interface Batch {
   name: string;
 }
 
-const products = [
-  { id: '1', name: 'Whole Chicken' },
-  { id: '2', name: 'Quarter Cuts' },
-  { id: '3', name: 'Dog Food' },
-  { id: '4', name: 'Neck' },
-  { id: '5', name: 'Feet' },
-  { id: '6', name: 'Gizzards' },
-];
+interface DressedInventoryItem {
+  id: string;
+  productType: string;
+  batchId: string | null;
+  batchName: string;
+  availableCount: number;
+  availableWeightKg: number;
+  unitPrice: number;
+  createdAt: string;
+  updatedAt: string;
+  lowStock: boolean;
+}
 
 export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: EditOrderModalProps) {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [products, setProducts] = useState<DressedInventoryItem[]>([]); // Add state for dynamic products
   const [orderData, setOrderData] = useState<any>(null);
   const updateOrder = useUpdateOrder();
 
@@ -71,7 +76,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
 
   const { fields, append, remove } = useFieldArray({ control, name: 'orderItems' });
 
-  const orderItems = watch('orderItems');
+  const orderItems = watch('orderItems') as OrderFormData['orderItems'];
   const orderDate = watch('orderDate');
   const isPastDate = orderDate ? new Date(orderDate) < new Date() : false;
   const totalAmount = orderItems.reduce((sum, item) => {
@@ -87,38 +92,29 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
 
   useEffect(() => {
     if (isOpen) {
+      // Fetch all batches for the dropdown (no filtering)
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(data))
+        .then((data) => {
+          const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+          setBatches(batchesArray);
+        })
         .catch((error) => console.error('Error fetching batches:', error));
 
-      if (orderId) {
-        fetch(`/api/orders/${orderId}`)
-          .then((response) => response.json())
-          .then((data) => {
-            setOrderData(data);
-            reset({
-              orderNumber: data.orderNumber,
-              customerName: data.customerName,
-              customerPhone: data.customerPhone,
-              orderDate: data.orderDate.split('T')[0],
-              totalAmount: data.totalAmount ?? 0,
-              amountPaid: data.amountPaid ?? 0,
-              linkedBatchId: data.linkedBatchId,
-              orderItems: data.orderItems.map((item: any) => ({
-                id: item.id,
-                productId: item.productId,
-                qtyCount: Number(item.qtyCount) || 0,
-                qtyWeight: Number(item.qtyWeight) || Number(item.weightKg) || 0,
-                unitPrice: Number(item.unitPrice) || 0,
-                priceMode: item.priceMode,
-              })),
-            });
-          })
-          .catch((error) => console.error('Error fetching order:', error));
-      }
+      // Fetch dressed inventory products
+      fetch('/api/dressed_inventory')
+        .then((response) => response.json())
+        .then((data) => {
+          // Create unique product list based on productType
+          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
+          const uniqueProducts = Array.from(
+            new Map(inventoryItems.map((item) => [item.productType, item])).values()
+          ) as DressedInventoryItem[];
+          setProducts(uniqueProducts);
+        })
+        .catch((error) => console.error('Error fetching products:', error));
     }
-  }, [isOpen, orderId, reset]);
+  }, [isOpen]);
 
   const onSubmit = async (data: OrderFormData) => {
     try {
@@ -193,8 +189,8 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
                   >
                     <option value="">Select product</option>
                     {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
+                      <option key={product.id} value={product.productType}>
+                        {product.productType}
                       </option>
                     ))}
                   </select>

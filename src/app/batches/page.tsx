@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import BatchStatusBadge from "@/components/ui/BatchStatusBadge";
@@ -39,6 +40,12 @@ export default function Batches() {
     deleteBatchId,
     setDeleteBatch
   } = useUiStore();
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+  });
 
   const columns = [
     {
@@ -54,6 +61,7 @@ export default function Batches() {
         </span>
       )
     },
+    { key: "startDate", header: "Start Date", minWidth: "100px", render: (value: string) => new Date(value).toLocaleDateString() },
     { key: "name", header: "Batch Name", minWidth: "120px" },
     { key: "docPurchasedCount", header: "DOC Purchased", minWidth: "100px" },
     { key: "docFreeCount", header: "DOC Free", minWidth: "80px" },
@@ -61,7 +69,6 @@ export default function Batches() {
     { key: "totalMortality", header: "Mortality", minWidth: "80px" },
     { key: "effectiveUnitCost", header: "Unit Cost", minWidth: "100px", render: (value: number) => formatCurrency(value) },
     { key: "status", header: "Status", minWidth: "100px", render: (value: string) => <BatchStatusBadge status={value as Batch['status']} /> },
-    { key: "startDate", header: "Start Date", minWidth: "100px", render: (value: string) => new Date(value).toLocaleDateString() },
     { key: "insights", header: "Insights", minWidth: "120px", render: (_: unknown, row: Batch) => <InsightBadges batchId={row.id} /> },
     {
       key: "actions",
@@ -91,15 +98,30 @@ export default function Batches() {
     },
   ];
 
-  const { data: batches, isLoading, error, refetch } = useBatches();
+  const { data: batchesData, isLoading, error, refetch } = useBatches();
+  const batches = batchesData?.batches || batchesData || [];
+
+  // Update pagination state when data changes
+  useEffect(() => {
+    if (batchesData && typeof batchesData === 'object' && 'currentPage' in batchesData) {
+      setPagination(prev => ({
+        ...prev,
+        currentPage: batchesData.currentPage || 1,
+        totalPages: batchesData.totalPages || 1,
+        totalItems: batchesData.totalItems || batches.length,
+      }));
+    }
+  }, [batchesData, batches.length]);
   const deleteBatchMutation = useDeleteBatch();
 
   const handleAddSuccess = () => {
     setAddBatchOpen(false);
+    refetch();
   };
 
   const handleEditSuccess = () => {
     setEditBatch(false, null);
+    refetch();
   };
 
   const handleDeleteConfirm = async () => {
@@ -108,6 +130,7 @@ export default function Batches() {
         await deleteBatchMutation.mutateAsync(deleteBatchId);
         toast.success('Batch deleted successfully');
         setDeleteBatch(false, null);
+        refetch();
       } catch (error) {
         console.error('Failed to delete batch:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to delete batch';
@@ -115,6 +138,12 @@ export default function Batches() {
         setDeleteBatch(false, null);
       }
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    // For now, we'll refetch with new page - in a real implementation you'd pass page to the hook
+    // Since the hook doesn't support pagination yet, we'll just refetch
+    refetch();
   };
 
   const handleDeleteCancel = () => {
@@ -191,7 +220,17 @@ export default function Batches() {
           <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Manage and track your chicken batches</p>
         </div>
         <div className="p-6">
-          <Table columns={columns} data={batches || []} />
+          <Table
+            columns={columns}
+            data={batches || []}
+            pagination={{
+              currentPage: pagination.currentPage,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.itemsPerPage,
+              onPageChange: handlePageChange,
+            }}
+          />
         </div>
       </div>
       <AddBatchModal

@@ -29,11 +29,11 @@ export async function GET(request: Request) {
     const revenueByProduct = orders.reduce(
       (acc: Record<string, number>, order: any) => {
         (order.order_items || []).forEach((item: any) => {
-          const productId = item.product_id;
-          if (!acc[productId]) {
-            acc[productId] = 0;
+          const productName = item.product_name;
+          if (!acc[productName]) {
+            acc[productName] = 0;
           }
-          acc[productId] += (item.subtotal || 0);
+          acc[productName] += (item.total_price || 0);
         });
         return acc;
       },

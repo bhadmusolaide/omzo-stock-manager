@@ -30,20 +30,70 @@ const createBatchSchema = z.object({
   notes: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = createClientServiceRole();
-    const { data: batches, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const hideClosedZeroInventory = searchParams.get('hideClosedZeroInventory') === 'true';
+    const offset = (page - 1) * limit;
+
+    let query = supabase
       .from('batches')
       .select(`
         *
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data: batches, error, count } = await query;
 
     if (error) throw error;
 
+    // Apply client-side filtering for closed batches with zero inventory if requested
+    let filteredBatches = batches || [];
+    if (hideClosedZeroInventory) {
+      // Fetch inventory data for filtering
+      const batchIds = filteredBatches.map((batch: any) => batch.id);
+      if (batchIds.length > 0) {
+        const { data: inventoryData, error: inventoryError } = await supabase
+          .from('dressed_inventory')
+          .select('batch_id, available_count, available_weight_kg')
+          .in('batch_id', batchIds)
+          .eq('is_deleted', false);
+
+        if (!inventoryError && inventoryData) {
+          // Create a map of batch_id to inventory items
+          const inventoryMap: Record<string, any[]> = {};
+          inventoryData.forEach((item: any) => {
+            if (!inventoryMap[item.batch_id]) {
+              inventoryMap[item.batch_id] = [];
+            }
+            inventoryMap[item.batch_id].push(item);
+          });
+
+          // Filter batches
+          filteredBatches = filteredBatches.filter((batch: any) => {
+            // If batch is not closed, include it
+            if (batch.status !== 'CLOSED') return true;
+            
+            // If batch is closed, check if it has any inventory
+            const batchInventory = inventoryMap[batch.id] || [];
+            const hasInventory = batchInventory.some((item: any) => 
+              (item.available_count && item.available_count > 0) || 
+              (item.available_weight_kg && item.available_weight_kg > 0)
+            );
+            
+            // Include closed batches only if they have inventory
+            return hasInventory;
+          });
+        }
+      }
+    }
+
     // Transform to camelCase
-    const transformedBatches = (batches || []).map((batch: Batch) => ({
+    const transformedBatches = filteredBatches.map((batch: any) => ({
       id: batch.id,
       name: batch.name,
       docPurchasedCount: batch.doc_purchased_count,
@@ -61,7 +111,16 @@ export async function GET() {
       updatedAt: batch.updated_at,
     }));
 
-    return NextResponse.json(transformedBatches);
+    const totalItems = count || 0;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return NextResponse.json({
+      batches: transformedBatches,
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+    });
   } catch (error) {
     console.error('Error fetching batches:', error);
     return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 });

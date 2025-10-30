@@ -63,20 +63,34 @@ export default function Orders() {
     batchId: '',
     search: '',
   });
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+  });
 
   const deleteOrderMutation = useDeleteOrder();
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page = 1) => {
     try {
       const params = new URLSearchParams();
       if (filters.status) params.append('status', filters.status);
       if (filters.batchId) params.append('batchId', filters.batchId);
       if (filters.search) params.append('search', filters.search);
+      params.append('page', page.toString());
+      params.append('limit', pagination.itemsPerPage.toString());
 
       const response = await fetch(`/api/orders?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        setOrders(data);
+        setOrders(data.orders || data);
+        setPagination(prev => ({
+          ...prev,
+          currentPage: data.currentPage || page,
+          totalPages: data.totalPages || 1,
+          totalItems: data.totalItems || (data.orders?.length || data.length),
+        }));
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -86,7 +100,7 @@ export default function Orders() {
   };
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(1);
     fetch('/api/batches')
       .then((response) => response.json())
       .then((data) => setBatches(Array.isArray(data) ? data : []))
@@ -98,12 +112,12 @@ export default function Orders() {
   };
 
   const handleAddSuccess = () => {
-    fetchOrders();
+    fetchOrders(pagination.currentPage);
     setAddOrderOpen(false);
   };
 
   const handleEditSuccess = () => {
-    fetchOrders();
+    fetchOrders(pagination.currentPage);
     setEditOrder(false, null);
   };
 
@@ -112,7 +126,7 @@ export default function Orders() {
       try {
         await deleteOrderMutation.mutateAsync(deleteOrderId);
         toast.success('Order deleted successfully');
-        fetchOrders(); // Refresh the orders list
+        fetchOrders(pagination.currentPage); // Refresh the orders list
         setDeleteOrder(false, null);
       } catch (error) {
         console.error('Failed to delete order:', error);
@@ -121,6 +135,10 @@ export default function Orders() {
         setDeleteOrder(false, null);
       }
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    fetchOrders(page);
   };
 
   const handleDeleteCancel = () => {
@@ -132,16 +150,25 @@ export default function Orders() {
   const totalOrderAmount = orders.reduce((sum, order) => sum + (Number(order.totalAmount) || 0), 0);
 
   const columns = [
-    { key: "orderNumber", header: "Order Number", render: (value: string | null) => value || 'N/A' },
-    { key: "customerName", header: "Customer", render: (value: string | null) => value || 'N/A' },
-    { key: "orderDate", header: "Date", render: (value: string | null) => {
+    { key: "orderNumber", header: "Order No", minWidth: "100px", maxWidth: "120px", truncate: true, render: (value: string | null) => value || 'N/A' },
+    { key: "batchName", header: "Batch", minWidth: "100px", render: (value: string | null) => value || 'N/A' },
+    { key: "customerName", header: "Customer", minWidth: "120px", render: (value: string | null) => value || 'N/A' },
+    { key: "orderDate", header: "Date", minWidth: "100px", render: (value: string | null) => {
       if (!value) return 'N/A';
       const date = new Date(value);
       return !isNaN(date.getTime()) ? date.toLocaleDateString() : 'Invalid Date';
     } },
-    { key: "totalAmount", header: "Total", render: (value: number | null) => formatCurrency(Number(value) || 0) },
-    { key: "amountPaid", header: "Paid", render: (value: number | null) => formatCurrency(Number(value) || 0) },
-    { key: "paymentStatus", header: "Status", render: (value: string | null) => {
+    { key: "totalAmount", header: "Total", minWidth: "100px", render: (value: number | null) => formatCurrency(Number(value) || 0) },
+    { key: "totalWeight", header: "Total Weight", minWidth: "100px", render: (_: unknown, row: Order) => {
+      const totalWeight = row.orderItems?.reduce((sum, item) => sum + (item.qtyWeight || 0), 0) || 0;
+      return `${totalWeight.toFixed(2)} kg`;
+    } },
+    { key: "amountPaid", header: "Paid", minWidth: "100px", render: (value: number | null) => formatCurrency(Number(value) || 0) },
+    { key: "outstandingBalance", header: "Outstanding", minWidth: "100px", render: (_: unknown, row: Order) => {
+      const outstanding = (Number(row.totalAmount) || 0) - (Number(row.amountPaid) || 0);
+      return formatCurrency(Math.max(0, outstanding));
+    } },
+    { key: "paymentStatus", header: "Status", minWidth: "80px", render: (value: string | null) => {
       const status = value || 'PENDING';
       return (
         <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -153,10 +180,9 @@ export default function Orders() {
         </span>
       );
     } },
-    { key: "location", header: "Location", render: (value: string | null) => value || 'N/A' },
-    { key: "batchName", header: "Batch", render: (value: string | null) => value || 'N/A' },
-    { key: "insights", header: "Insights", render: (_: unknown, row: Order) => <InsightBadges orderId={row.id} /> },
-    { key: "actions", header: "Actions", render: (_: unknown, row: Order) => (
+    { key: "location", header: "Location", minWidth: "100px", render: (value: string | null) => value || 'N/A' },
+    { key: "insights", header: "Insights", minWidth: "100px", render: (_: unknown, row: Order) => <InsightBadges orderId={row.id} /> },
+    { key: "actions", header: "Actions", minWidth: "140px", render: (_: unknown, row: Order) => (
       <div className="flex gap-2">
         <Button size="sm" onClick={() => setEditOrder(true, row.id)}>Edit</Button>
         <Button
@@ -316,7 +342,17 @@ export default function Orders() {
           </div>
 
           <div className="bg-white dark:bg-slate-700 shadow rounded-lg p-4 transition-colors duration-300">
-            <Table columns={columns} data={orders} />
+            <Table
+              columns={columns}
+              data={orders}
+              pagination={{
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                totalItems: pagination.totalItems,
+                itemsPerPage: pagination.itemsPerPage,
+                onPageChange: handlePageChange,
+              }}
+            />
           </div>
         </TabsContent>
 

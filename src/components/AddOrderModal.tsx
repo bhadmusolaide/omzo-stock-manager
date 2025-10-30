@@ -44,17 +44,22 @@ interface Batch {
   name: string;
 }
 
-const products = [
-  { id: '1', name: 'Whole Chicken' },
-  { id: '2', name: 'Quarter Cuts' },
-  { id: '3', name: 'Dog Food' },
-  { id: '4', name: 'Neck' },
-  { id: '5', name: 'Feet' },
-  { id: '6', name: 'Gizzards' },
-];
+interface DressedInventoryItem {
+  id: string;
+  productType: string;
+  batchId: string | null;
+  batchName: string;
+  availableCount: number;
+  availableWeightKg: number;
+  unitPrice: number;
+  createdAt: string;
+  updatedAt: string;
+  lowStock: boolean;
+}
 
 export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderModalProps) {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [products, setProducts] = useState<DressedInventoryItem[]>([]); // Add state for dynamic products
   const createOrder = useCreateOrder();
 
   const {
@@ -80,7 +85,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
     name: 'orderItems',
   });
 
-  const orderItems = watch('orderItems');
+  const orderItems = watch('orderItems') as OrderFormData['orderItems'];
   const totalAmount = orderItems.reduce((sum, item) => {
     const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
                     item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
@@ -94,10 +99,27 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
 
   useEffect(() => {
     if (isOpen) {
+      // Fetch all batches for the dropdown (no filtering)
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(data))
+        .then((data) => {
+          const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+          setBatches(batchesArray);
+        })
         .catch((error) => logger.error('Error fetching batches:', error));
+      
+      // Fetch dressed inventory products
+      fetch('/api/dressed_inventory')
+        .then((response) => response.json())
+        .then((data) => {
+          // Create unique product list based on productType
+          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
+          const uniqueProducts = Array.from(
+            new Map(inventoryItems.map((item) => [item.productType, item])).values()
+          ) as DressedInventoryItem[];
+          setProducts(uniqueProducts);
+        })
+        .catch((error) => logger.error('Error fetching products:', error));
     }
   }, [isOpen]);
 
@@ -170,8 +192,8 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                   >
                     <option value="">Select product</option>
                     {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
+                      <option key={product.id} value={product.productType}>
+                        {product.productType}
                       </option>
                     ))}
                   </select>

@@ -63,8 +63,8 @@ export async function GET(
       orderItems: (order.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_count : 0,
-        qtyWeight: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_weight : 0,
+        qtyCount: item.qty_count || 0,
+        qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),
@@ -367,8 +367,8 @@ export async function PATCH(
       orderItems: (finalOrder.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: (item.price_mode === 'COUNT' || item.price_mode === 'COUNT_KG') ? item.qty_count : 0,
-        qtyWeight: (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? item.qty_weight : 0,
+        qtyCount: item.qty_count || 0,
+        qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),

@@ -107,9 +107,10 @@ export default function ProcessingModal({
       try {
         const response = await fetch('/api/dressed_inventory');
         if (response.ok) {
-          const data: DressedInventoryItem[] = await response.json();
+          const data = await response.json();
+          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
           // Extract unique product types
-          const uniqueProductTypes = Array.from(new Set(data.map(item => item.productType)));
+          const uniqueProductTypes = Array.from(new Set(inventoryItems.map(item => item.productType)));
           setProductTypes(uniqueProductTypes);
           
           // Set default product type to first available if exists

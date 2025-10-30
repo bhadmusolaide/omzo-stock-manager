@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
 
     let query = supabase
       .from('transactions')
@@ -34,8 +37,9 @@ export async function GET(request: NextRequest) {
           id,
           customer_name
         )
-      `)
-      .order('date', { ascending: false });
+      `, { count: 'exact' })
+      .order('date', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (type) {
       query = query.eq('type', type);
@@ -53,11 +57,20 @@ export async function GET(request: NextRequest) {
       query = query.ilike('description', `%${search}%`);
     }
 
-    const { data: transactions, error } = await query;
+    const { data: transactions, error, count } = await query;
 
     if (error) throw error;
 
-    return NextResponse.json(transactions || []);
+    const totalItems = count || 0;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return NextResponse.json({
+      transactions: transactions || [],
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+    });
   } catch (error) {
     console.error('Error fetching transactions:', error);
     return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });

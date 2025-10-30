@@ -32,7 +32,7 @@ export default function Home() {
   const { data: metrics, isLoading: metricsLoading } = useOverviewMetrics();
   const { data: transactions, isLoading: txLoading } = useTransactions({});
 
-  const recentTransactions = transactions?.slice(0, 5) || [];
+  const recentTransactions = (transactions?.transactions || transactions || [])?.slice(0, 5) || [];
 
   if (metricsLoading) {
     return (

@@ -166,20 +166,46 @@ export async function POST(
 
     // Update or create dressed_inventory entries
     for (const item of validatedData.yieldMap) {
-      const inventoryPayload = {
-        product_type: item.productType,
-        batch_id: id,
-        available_count: item.unitCount,
-        available_weight_kg: item.totalWeightKg,
-        unit_price: costPerDressedKg,  // Cost per kg
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Since no unique constraint, insert new entry; aggregate in queries later
-      await supabase
+      // Check if an inventory entry already exists for this product type and batch
+      const { data: existingInventory, error: fetchError } = await supabase
         .from('dressed_inventory')
-        .insert(inventoryPayload);
+        .select('*')
+        .eq('product_type', item.productType)
+        .eq('batch_id', id)
+        .eq('is_deleted', false)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      if (existingInventory) {
+        // Update existing entry by adding to the current counts
+        const { error: updateError } = await supabase
+          .from('dressed_inventory')
+          .update({
+            available_count: existingInventory.available_count + item.unitCount,
+            available_weight_kg: existingInventory.available_weight_kg + item.totalWeightKg,
+            unit_price: costPerDressedKg,  // Update with latest cost
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingInventory.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Create new entry if none exists
+        const inventoryPayload = {
+          product_type: item.productType,
+          batch_id: id,
+          available_count: item.unitCount,
+          available_weight_kg: item.totalWeightKg,
+          unit_price: costPerDressedKg,  // Cost per kg
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        await supabase
+          .from('dressed_inventory')
+          .insert(inventoryPayload);
+      }
     }
 
     // Transform response

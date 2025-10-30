@@ -64,7 +64,8 @@ export default function BatchDetail() {
   const params = useParams();
   const batchId = params.id as string;
   const { editBatchOpen, setEditBatch } = useUiStore();
-  const { data: allBatches } = useBatches();
+  const { data: allBatchesData } = useBatches();
+  const allBatches = allBatchesData?.batches || allBatchesData || [];
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [weighings, setWeighings] = useState<Weighing[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);

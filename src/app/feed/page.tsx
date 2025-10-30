@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import FeedTypeBadge from "@/components/ui/FeedTypeBadge";
@@ -60,9 +60,29 @@ export default function Feed() {
   const [filters, setFilters] = useState({
     batchId: '',
   });
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+  });
 
-  const { data: feedPurchases, isLoading, error } = useFeedPurchases(filters.batchId);
-  const { data: batches } = useBatches();
+  const { data: feedPurchasesData, isLoading, error } = useFeedPurchases(filters.batchId);
+  const feedPurchases = feedPurchasesData?.feedPurchases || feedPurchasesData || [];
+
+  // Update pagination state when data changes
+  useEffect(() => {
+    if (feedPurchasesData && typeof feedPurchasesData === 'object' && 'currentPage' in feedPurchasesData) {
+      setPagination(prev => ({
+        ...prev,
+        currentPage: feedPurchasesData.currentPage || 1,
+        totalPages: feedPurchasesData.totalPages || 1,
+        totalItems: feedPurchasesData.totalItems || feedPurchases.length,
+      }));
+    }
+  }, [feedPurchasesData, feedPurchases.length]);
+  const { data: batchesData } = useBatches();
+  const batches = batchesData?.batches || batchesData || [];
   const deleteFeedMutation = useDeleteFeedPurchase();
 
   const columns = [
@@ -78,6 +98,16 @@ export default function Feed() {
           {value.substring(0, 8)}...
         </span>
       )
+    },
+    {
+      key: "purchase_date",
+      header: "Purchase Date",
+      minWidth: "120px",
+      render: (value: string | null) => {
+        if (!value) return 'N/A';
+        const date = new Date(value);
+        return !isNaN(date.getTime()) ? date.toLocaleDateString() : 'Invalid Date';
+      }
     },
     { key: "batches.name", header: "Batch Name", minWidth: "120px" },
     {
@@ -101,16 +131,6 @@ export default function Feed() {
       render: (value: number | null) => value != null ? formatCurrency(value) : formatCurrency(0)
     },
     { key: "supplier", header: "Supplier", minWidth: "100px", render: (value: string | null) => value || 'N/A' },
-    {
-      key: "purchase_date",
-      header: "Purchase Date",
-      minWidth: "120px",
-      render: (value: string | null) => {
-        if (!value) return 'N/A';
-        const date = new Date(value);
-        return !isNaN(date.getTime()) ? date.toLocaleDateString() : 'Invalid Date';
-      }
-    },
     {
       key: "actions",
       header: "Actions",
@@ -168,6 +188,11 @@ export default function Feed() {
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handlePageChange = (page: number) => {
+    // For now, we'll just refetch - in a real implementation you'd pass page to the hook
+    // Since the hook doesn't support pagination yet, we'll just refetch
   };
 
   if (isLoading) {
@@ -251,7 +276,17 @@ export default function Feed() {
           <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Track all feed purchases and consumption</p>
         </div>
         <div className="p-6">
-          <Table columns={columns} data={feedPurchases || []} />
+          <Table
+            columns={columns}
+            data={feedPurchases || []}
+            pagination={{
+              currentPage: pagination.currentPage,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.itemsPerPage,
+              onPageChange: handlePageChange,
+            }}
+          />
         </div>
       </div>
       <AddFeedModal

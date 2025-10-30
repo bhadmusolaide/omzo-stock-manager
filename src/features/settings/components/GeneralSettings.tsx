@@ -11,7 +11,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export function GeneralSettings() {
   const { data: settings, isLoading, error } = useSettings();
-  const { mutate: updateSettings, isPending } = useUpdateSettings();
+
+  useEffect(() => {
+    if (settings) {
+      setCompanyName(settings.companyName || '');
+      setCurrency(settings.currency || 'NGN');
+      setCurrencySymbol(settings.currencySymbol || '₦');
+      setLowStockThreshold(settings.lowStockThreshold || 50);
+      setFcrPresets(parseFeedConversionPresets(settings.feedConversionPresets));
+    }
+  }, [settings]);
+
+  const updateSettingsMutation = useUpdateSettings();
+  const { isPending } = updateSettingsMutation;
 
   const [resetOpen, setResetOpen] = useState(false);
 
@@ -41,23 +53,26 @@ export function GeneralSettings() {
   const [lowStockThreshold, setLowStockThreshold] = useState(50);
   const [fcrPresets, setFcrPresets] = useState({ STARTER: 1.8, GROWER: 2.0, FINISHER: 2.2 });
 
-  useEffect(() => {
-    if (settings) {
-      setCompanyName(settings.companyName || '');
-      setCurrency(settings.currency || 'NGN');
-      setCurrencySymbol(settings.currencySymbol || '₦');
-      setLowStockThreshold(settings.lowStockThreshold || 50);
-      setFcrPresets(parseFeedConversionPresets(settings.feedConversionPresets));
-    }
-  }, [settings]);
-
   const handleSave = () => {
-    updateSettings({
+    updateSettingsMutation.mutate({
       companyName,
       currency,
       currencySymbol,
       lowStockThreshold,
       feedConversionPresets: JSON.stringify(fcrPresets),
+    }, {
+      onSuccess: (data) => {
+        // Update the form state with the returned data
+        setCompanyName(data.companyName || '');
+        setCurrency(data.currency || 'NGN');
+        setCurrencySymbol(data.currencySymbol || '₦');
+        setLowStockThreshold(data.lowStockThreshold || 50);
+        setFcrPresets(parseFeedConversionPresets(data.feedConversionPresets));
+        toast.success('Settings saved successfully');
+      },
+      onError: (error: any) => {
+        toast.error('Failed to save settings: ' + (error.message || 'Unknown error'));
+      },
     });
   };
 
@@ -78,7 +93,7 @@ export function GeneralSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Company Name</label>
             <Input
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
@@ -156,7 +171,10 @@ export function GeneralSettings() {
               type="number"
               step="1"
               value={lowStockThreshold}
-              onChange={(e) => setLowStockThreshold(parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                setLowStockThreshold(value);
+              }}
             />
           </div>
         </CardContent>

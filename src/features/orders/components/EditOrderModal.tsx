@@ -103,19 +103,23 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
       setIsDataLoaded(false);
       setOrderData(null);
       
-      // Fetch batches
+      // Fetch all batches for the dropdown (no filtering)
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(Array.isArray(data) ? data : []))
+        .then((data) => {
+          const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+          setBatches(batchesArray);
+        })
         .catch((error) => console.error('Error fetching batches:', error));
 
       // Fetch dressed inventory products
       fetch('/api/dressed_inventory')
         .then((response) => response.json())
-        .then((data: DressedInventoryItem[]) => {
+        .then((data) => {
+          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
           // Create unique product list based on productType
           const uniqueProducts = Array.from(
-            new Map(data.map((item) => [item.productType, item])).values()
+            new Map(inventoryItems.map((item) => [item.productType, item])).values()
           ) as DressedInventoryItem[];
           setProducts(uniqueProducts);
         })
@@ -171,9 +175,10 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
       fetch(`/api/dressed_inventory?batchId=${linkedBatchId}`)
         .then((response) => response.json())
         .then((data) => {
+          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
           setBatchInventory(prev => ({
             ...prev,
-            [linkedBatchId]: data
+            [linkedBatchId]: inventoryItems
           }));
         })
         .catch((error) => console.error('Error fetching batch inventory:', error));

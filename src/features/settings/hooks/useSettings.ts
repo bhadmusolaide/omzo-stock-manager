@@ -38,10 +38,21 @@ export function useUpdateSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update settings');
+      
+      if (!res.ok) {
+        const responseText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (e) {
+          errorData = { error: responseText || 'Unknown error' };
+        }
+        throw new Error(errorData.error || 'Failed to update settings');
+      }
+      
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
   });

@@ -23,14 +23,16 @@ export default function Reports() {
   const { data: expenseData, isLoading: expenseLoading } = useExpenseBreakdown(selectedBatchId || undefined);
   const { data: revenueData, isLoading: revenueLoading } = useRevenueBreakdown(selectedBatchId || undefined);
 
-  const { data: batches = [] } = useQuery<Batch[]>({
+  const { data: batchesData = [] } = useQuery<Batch[]>({
     queryKey: ['batches'],
     queryFn: async () => {
       const res = await fetch('/api/batches');
       if (!res.ok) throw new Error('Failed to fetch batches');
-      return res.json();
+      const data = await res.json();
+      return data.batches || data;
     },
   });
+  const batches = Array.isArray(batchesData) ? batchesData : [];
 
   const batchReports = useQueries({
     queries: batches.map(batch => ({
@@ -196,12 +198,14 @@ export default function Reports() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Expenses</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Profit</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Margin %</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Dressing %</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">FCR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-slate-600">
                   {batches.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-4 text-center text-gray-500 dark:text-slate-400">
+                      <td colSpan={10} className="px-6 py-4 text-center text-gray-500 dark:text-slate-400">
                         No batches available
                       </td>
                     </tr>

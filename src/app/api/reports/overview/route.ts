@@ -52,8 +52,8 @@ export async function GET() {
     const overallProfit = totalIncome - totalExpenses;
 
     // Calculate mortality rate
-    const totalBirds = batches.reduce((sum: number, b: any) => sum + (b.docPurchasedCount + b.docFreeCount), 0);
-    const totalMortality = batches.reduce((sum: number, b: any) => sum + b.totalMortality, 0);
+    const totalBirds = batches.reduce((sum: number, b: any) => sum + (b.doc_purchased_count + b.doc_free_count), 0);
+    const totalMortality = batches.reduce((sum: number, b: any) => sum + b.total_mortality, 0);
     const mortalityRate = totalBirds > 0 ? (totalMortality / totalBirds) * 100 : 0;
 
     // Calculate average feed cost per kg

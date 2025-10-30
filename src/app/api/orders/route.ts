@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const batchId = searchParams.get('batchId');
     const search = searchParams.get('search');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
 
     let query = supabase
       .from('orders')
@@ -39,8 +42,9 @@ export async function GET(request: NextRequest) {
         order_items (
           *
         )
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (status) {
       query = query.eq('payment_status', status);
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
       query = query.ilike('customer_name', `%${search}%`);
     }
 
-    const { data: orders, error } = await query;
+    const { data: orders, error, count } = await query;
 
     if (error) throw error;
 
@@ -74,8 +78,8 @@ export async function GET(request: NextRequest) {
       orderItems: (order.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name,
-        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
-        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        qtyCount: item.qty_count || 0,
+        qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),
@@ -83,7 +87,16 @@ export async function GET(request: NextRequest) {
       updatedAt: order.updated_at,
     }));
 
-    return NextResponse.json(transformedOrders);
+    const totalItems = count || 0;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return NextResponse.json({
+      orders: transformedOrders,
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+    });
   } catch (error) {
     console.error('Error fetching orders:', error);
     return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
@@ -313,8 +326,8 @@ export async function POST(request: NextRequest) {
       orderItems: (fullOrder.order_items || []).map((item: any) => ({
         id: item.id,
         productId: item.product_name, // Fixed: Use product_name instead of product_id
-        qtyCount: item.price_mode === 'KG' ? 0 : item.quantity,
-        qtyWeight: item.price_mode === 'KG' ? item.quantity : 0,
+        qtyCount: item.qty_count || 0,
+        qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       })),

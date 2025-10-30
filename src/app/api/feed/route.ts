@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     const supabase = createClientServiceRole();
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
 
     let query = supabase
       .from('feed_purchases')
@@ -27,18 +30,28 @@ export async function GET(request: NextRequest) {
           id,
           name
         )
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (batchId) {
       query = query.eq('batch_id', batchId);
     }
 
-    const { data: feedPurchases, error } = await query;
+    const { data: feedPurchases, error, count } = await query;
 
     if (error) throw error;
 
-    return NextResponse.json(feedPurchases || []);
+    const totalItems = count || 0;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return NextResponse.json({
+      feedPurchases: feedPurchases || [],
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+    });
   } catch (error) {
     console.error('Error fetching feed purchases:', error);
     return NextResponse.json({ error: 'Failed to fetch feed purchases' }, { status: 500 });

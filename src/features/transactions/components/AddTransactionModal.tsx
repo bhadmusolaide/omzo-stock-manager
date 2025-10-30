@@ -59,12 +59,18 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
     if (isOpen) {
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(Array.isArray(data) ? data : []))
+        .then((data) => {
+          const batchesArray = data.batches || data;
+          setBatches(Array.isArray(batchesArray) ? batchesArray : []);
+        })
         .catch((error) => console.error('Error fetching batches:', error));
 
       fetch('/api/orders')
         .then((response) => response.json())
-        .then((data) => setOrders(Array.isArray(data) ? data : []))
+        .then((data) => {
+          const ordersArray = data.orders || data;
+          setOrders(Array.isArray(ordersArray) ? ordersArray : []);
+        })
         .catch((error) => console.error('Error fetching orders:', error));
 
       reset({
