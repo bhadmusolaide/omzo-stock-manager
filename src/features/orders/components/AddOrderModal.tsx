@@ -94,12 +94,41 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
 
   useEffect(() => {
     if (isOpen) {
-      // Fetch all batches for the dropdown (no filtering)
+      // Fetch all batches for the dropdown and filter out closed batches with zero inventory
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => {
+        .then(async (data) => {
           const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
-          setBatches(batchesArray);
+
+          // Filter out closed batches with zero inventory
+          const filteredBatches = [];
+          for (const batch of batchesArray) {
+            if (batch.status !== 'CLOSED') {
+              // Include non-closed batches
+              filteredBatches.push(batch);
+            } else {
+              // For closed batches, check if they have any inventory
+              try {
+                const inventoryResponse = await fetch(`/api/dressed_inventory?batchId=${batch.id}`);
+                const inventoryData = await inventoryResponse.json();
+                const inventoryItems = inventoryData.inventory || inventoryData;
+
+                const hasInventory = inventoryItems.some((item: any) =>
+                  (item.availableCount && item.availableCount > 0) ||
+                  (item.availableWeightKg && item.availableWeightKg > 0)
+                );
+
+                if (hasInventory) {
+                  filteredBatches.push(batch);
+                }
+              } catch (error) {
+                console.error('Error checking inventory for batch:', batch.id, error);
+                // If we can't check inventory, exclude the closed batch to be safe
+              }
+            }
+          }
+
+          setBatches(filteredBatches);
         })
         .catch((error) => console.error('Error fetching batches:', error));
       
