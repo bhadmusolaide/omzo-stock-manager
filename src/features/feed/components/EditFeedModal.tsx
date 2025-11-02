@@ -78,7 +78,8 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
         .then((response) => response.json())
         .then((data) => {
           const batchesArray = data.batches || data;
-          setBatches(Array.isArray(batchesArray) ? batchesArray : []);
+          const filteredBatches = Array.isArray(batchesArray) ? batchesArray.filter(batch => batch.status !== 'CLOSED') : [];
+          setBatches(filteredBatches);
         })
         .catch((error) => console.error('Error fetching batches:', error));
     }
