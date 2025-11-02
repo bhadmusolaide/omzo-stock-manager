@@ -19,7 +19,8 @@ export async function GET(
         feed_purchases (*),
         orders (*, order_items(*)),
         transactions (*),
-        processing_outputs (*)
+        processing_outputs (*),
+        processing_events (*)
       `)
       .eq('id', id)
       .single();
@@ -68,21 +69,46 @@ export async function GET(
     const mortalityPercent = totalBirds > 0 ? (totalMortality / totalBirds) * 100 : 0;
     const feedCostPerKg = totalFeedKg > 0 ? totalFeedCost / totalFeedKg : 0;
 
-    // Calculate FCR (Feed Conversion Ratio)
-    const finalWeight = batch.total_weight_kg || 0;
-    const fcr = finalWeight > 0 ? totalFeedKg / finalWeight : 0;
-
-    // Calculate processing metrics
-    const totalProcessedBirds = batch.processing_outputs?.filter((po: any) => po.output_type === 'dressed')
-      .reduce((sum: number, po: any) => sum + parseFloat(po.quantity || 0), 0) || 0;
+    console.log('Batch data:', batch);
+    console.log('Processing events:', batch.processing_events);
+    console.log('Processing outputs:', batch.processing_outputs);
     
-    const totalDressedWeightKg = batch.processing_outputs?.filter((po: any) => po.output_type === 'dressed')
-      .reduce((sum: number, po: any) => sum + parseFloat(po.quantity || 0), 0) || 0;
+    // Calculate processing metrics
+    // Handle both old and new schema for processing outputs
+    // Filter for all processing outputs as dressed products (all outputs are dressed products)
+    const totalProcessedBirds = batch.processing_outputs?.reduce((sum: number, po: any) => 
+      sum + parseFloat(po.unit_count || po.count || 0), 0) || 0;
 
-    const dressingPercentage = totalBirds > 0 ? (totalProcessedBirds / totalBirds) * 100 : 0;
-    const costPerDressedKg = totalDressedWeightKg > 0 ? totalExpenses / totalDressedWeightKg : 0;
+    const totalDressedWeightKg = batch.processing_outputs?.reduce((sum: number, po: any) => 
+      sum + parseFloat(po.total_weight_kg || po.quantity || 0), 0) || 0;
+
+    // Calculate final live weight (before processing)
+    // If batch.total_weight_kg is 0, try to calculate from processing events
+    let finalLiveWeight = batch.total_weight_kg || 0;
+    
+    if (finalLiveWeight === 0 && batch.processing_events && batch.processing_events.length > 0) {
+      // Calculate from processing events: sum of (avg_live_weight_kg * live_birds_processed)
+      finalLiveWeight = batch.processing_events.reduce((sum: number, event: any) => {
+        const avgWeight = parseFloat(event.avg_live_weight_kg || 0);
+        const liveBirds = parseInt(event.live_birds_processed || 0);
+        return sum + (avgWeight * liveBirds);
+      }, 0);
+    }
+
+    // Calculate FCR using proper formula (feed consumed per kg weight gain)
+    // Weight gain = final live weight - initial weight (assuming initial weight is negligible)
+    const fcr = calculateFCR(totalFeedKg, finalLiveWeight);
+
+    // Calculate dressing percentage using weights
+    const dressingPercentage = calculateDressingPercentage(totalDressedWeightKg, finalLiveWeight);
+    
+    console.log('Final live weight used for calculations:', finalLiveWeight);
+    console.log('Calculated FCR:', fcr);
+    console.log('Calculated dressing percentage:', dressingPercentage);
+
+    const costPerDressedKg = calculateCostPerDressedKg(totalExpenses, totalDressedWeightKg);
     const profitPerDressedKg = totalDressedWeightKg > 0 ? profit / totalDressedWeightKg : 0;
-    const weightLossPercentage = finalWeight > 0 ? ((finalWeight - totalDressedWeightKg) / finalWeight) * 100 : 0;
+    const weightLossPercentage = finalLiveWeight > 0 ? ((finalLiveWeight - totalDressedWeightKg) / finalLiveWeight) * 100 : 0;
 
     const batchReport = {
       id: batch.id,

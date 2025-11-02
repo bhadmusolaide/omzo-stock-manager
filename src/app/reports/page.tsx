@@ -238,21 +238,21 @@ function BatchSummaryRow({ batchName, report, isLoading }: { batchName: string; 
   }
 
   return (
-    <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4 text-sm text-gray-900 font-medium">{batchName}</td>
-      <td className="px-6 py-4 text-sm text-gray-600">{report.totalBirds}</td>
-      <td className="px-6 py-4 text-sm text-gray-600">{report.mortalityPercent.toFixed(1)}%</td>
-      <td className="px-6 py-4 text-sm text-gray-600">{report.totalFeedKg.toFixed(1)}</td>
-      <td className="px-6 py-4 text-sm text-green-600 font-medium">{formatCurrency(report.totalRevenue)}</td>
-      <td className="px-6 py-4 text-sm text-red-600 font-medium">{formatCurrency(report.totalExpenses)}</td>
-      <td className={`px-6 py-4 text-sm font-medium ${report.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+    <tr className="hover:bg-gray-50 dark:hover:bg-slate-800">
+      <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-50 font-medium">{batchName}</td>
+      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.totalBirds}</td>
+      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.mortalityPercent.toFixed(1)}%</td>
+      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.totalFeedKg.toFixed(1)}</td>
+      <td className="px-6 py-4 text-sm text-green-600 dark:text-green-400 font-medium">{formatCurrency(report.totalRevenue)}</td>
+      <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400 font-medium">{formatCurrency(report.totalExpenses)}</td>
+      <td className={`px-6 py-4 text-sm font-medium ${report.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
         {formatCurrency(report.profit)}
       </td>
-      <td className={`px-6 py-4 text-sm font-medium ${report.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+      <td className={`px-6 py-4 text-sm font-medium ${report.profitMargin >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
         {report.profitMargin.toFixed(1)}%
       </td>
-      <td className="px-6 py-4 text-sm text-gray-600">{report.dressingPercentage.toFixed(1)}%</td>
-      <td className="px-6 py-4 text-sm text-gray-600">{report.fcr.toFixed(2)}</td>
+      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.dressingPercentage.toFixed(1)}%</td>
+      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.fcr.toFixed(2)}</td>
     </tr>
   );
 }

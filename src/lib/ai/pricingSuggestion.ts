@@ -38,9 +38,10 @@ export async function calculatePricingSuggestion(batchId: string): Promise<Prici
     }
     
     // Calculate current dressed stock (processed chicken)
+    // Handle both old and new schema for processing outputs
+    // All processing outputs are dressed products
     const currentDressedStockKg = batch.processing_outputs
-      .filter((p: any) => p.output_type === 'DRESSED')
-      .reduce((sum: number, p: any) => sum + p.quantity, 0);
+      .reduce((sum: number, p: any) => sum + (p.total_weight_kg || p.quantity || 0), 0);
     
     // Default values
     const effectiveUnitCost = batch.effective_unit_cost || 0;
