@@ -160,10 +160,10 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Batch</label>
             <select
               {...register('batchId')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
             >
               <option value="">Select a batch</option>
               {batches.map((batch) => (
@@ -175,10 +175,10 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
             {errors.batchId && <p className="mt-1 text-sm text-red-600">{errors.batchId.message}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Feed Type</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Feed Type</label>
             <select
               {...register('feedType')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
             >
               <option value="">Select feed type</option>
               <option value="STARTER">Starter</option>
@@ -195,10 +195,10 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
             error={errors.kg?.message}
           />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand</label>
             <select
               {...register('brand')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
             >
               <option value="">Select brand (optional)</option>
               <option value="Ultima +">Ultima +</option>
@@ -218,7 +218,7 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
             error={errors.bagCost?.message}
           />
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Cost</label>
             <p className="text-lg font-semibold">{formatCurrency(totalCost)}</p>
           </div>
           <Input

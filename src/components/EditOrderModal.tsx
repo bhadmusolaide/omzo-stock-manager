@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { useUpdateOrder } from '@/hooks/useOrders';
+import { useOrderHistory } from '@/hooks/useOrderHistory';
 import { formatCurrency } from '@/utils/currency';
 
 const orderItemSchema = z.object({
@@ -61,7 +62,9 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [products, setProducts] = useState<DressedInventoryItem[]>([]); // Add state for dynamic products
   const [orderData, setOrderData] = useState<any>(null);
+  const [showHistory, setShowHistory] = useState(false); // State for showing history
   const updateOrder = useUpdateOrder();
+  const { data: orderHistory, isLoading: isHistoryLoading } = useOrderHistory(orderId);
 
   const {
     register,
@@ -116,6 +119,26 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && orderId) {
+      fetch(`/api/orders/${orderId}`)
+        .then((response) => response.json())
+        .then((data) => {
+          setOrderData(data);
+          reset({
+            orderNumber: data.orderNumber,
+            customerName: data.customerName,
+            customerPhone: data.customerPhone || '',
+            orderDate: new Date(data.orderDate).toISOString().split('T')[0],
+            amountPaid: data.amountPaid || 0,
+            linkedBatchId: data.linkedBatchId || '',
+            orderItems: data.orderItems || [],
+          });
+        })
+        .catch((error) => console.error('Error fetching order:', error));
+    }
+  }, [isOpen, orderId, reset]);
+
   const onSubmit = async (data: OrderFormData) => {
     try {
       const payload = { ...data, totalAmount };
@@ -128,7 +151,9 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
     }
   };
 
-  if (!orderData) return null;
+  // Allow rendering even when there's no order data (for new orders)
+  // Only prevent rendering if we're expecting to load existing order data but haven't yet
+  if (orderId && !orderData) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Order">
@@ -296,6 +321,66 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
           </p>
         </div>
 
+        {/* Order History Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit History</h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHistory(!showHistory)}
+            >
+              {showHistory ? 'Hide' : 'Show'} History
+            </Button>
+          </div>
+          
+          {showHistory && (
+            <div className="mt-4">
+              {isHistoryLoading ? (
+                <p>Loading history...</p>
+              ) : orderHistory && orderHistory.length > 0 ? (
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {orderHistory.map((historyItem) => (
+                    <div 
+                      key={historyItem.id} 
+                      className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800"
+                    >
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {getFieldDisplayName(historyItem.field_name)}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {new Date(historyItem.changed_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm">
+                        {historyItem.field_name === 'orderItems' ? (
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-300">Order items updated</p>
+                          </div>
+                        ) : (
+                          <div className="flex space-x-2">
+                            <span className="line-through text-red-500">
+                              {formatHistoryValue(historyItem.field_name, historyItem.old_value)}
+                            </span>
+                            <span className="text-gray-500">→</span>
+                            <span className="text-green-500">
+                              {formatHistoryValue(historyItem.field_name, historyItem.new_value)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 text-sm py-2">No edit history available</p>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-end space-x-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
@@ -307,4 +392,32 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
       </form>
     </Modal>
   );
+}
+
+// Helper function to format field names for display
+function getFieldDisplayName(fieldName: string): string {
+  switch (fieldName) {
+    case 'orderDate': return 'Order Date';
+    case 'linkedBatchId': return 'Linked Batch';
+    case 'amountPaid': return 'Amount Paid';
+    case 'orderItems': return 'Order Items';
+    default: return fieldName;
+  }
+}
+
+// Helper function to format values for display
+function formatHistoryValue(fieldName: string, value: string | null): string {
+  if (value === null) return 'None';
+  
+  switch (fieldName) {
+    case 'amountPaid':
+    case 'totalAmount':
+      return formatCurrency(parseFloat(value) || 0);
+    case 'orderDate':
+      return new Date(value).toLocaleDateString();
+    case 'linkedBatchId':
+      return value || 'None';
+    default:
+      return value;
+  }
 }

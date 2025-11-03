@@ -104,6 +104,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    // Track changes for history
+    const changes: Array<{
+      fieldName: string;
+      oldValue: any;
+      newValue: any;
+    }> = [];
+
     // Calculate new total if orderItems are updated
     let newTotalAmount = currentOrder.total_amount;
     if (validatedData.orderItems) {
@@ -125,6 +132,84 @@ export async function PATCH(
         paymentStatus = 'PARTIAL';
       } else {
         paymentStatus = 'PAID';
+      }
+    }
+
+    // Track field changes
+    if (validatedData.orderDate !== undefined) {
+      // Normalize both dates for comparison
+      const currentOrderDate = new Date(currentOrder.order_date).toISOString().split('T')[0];
+      const newOrderDate = new Date(validatedData.orderDate).toISOString().split('T')[0];
+      
+      if (currentOrderDate !== newOrderDate) {
+        changes.push({
+          fieldName: 'orderDate',
+          oldValue: currentOrderDate,
+          newValue: newOrderDate
+        });
+      }
+    }
+
+    if (validatedData.linkedBatchId !== undefined && validatedData.linkedBatchId !== currentOrder.linked_batch_id) {
+      changes.push({
+        fieldName: 'linkedBatchId',
+        oldValue: currentOrder.linked_batch_id,
+        newValue: validatedData.linkedBatchId
+      });
+    }
+
+    if (validatedData.amountPaid !== undefined && validatedData.amountPaid !== (currentOrder as any).amount_paid) {
+      changes.push({
+        fieldName: 'amountPaid',
+        oldValue: (currentOrder as any).amount_paid,
+        newValue: validatedData.amountPaid
+      });
+    }
+
+    // Check for order items changes
+    if (validatedData.orderItems) {
+      const currentItems = (currentOrder.order_items || []).map((item: any) => ({
+        productId: item.product_name,
+        qtyCount: item.qty_count || 0,
+        qtyWeight: item.qty_weight || 0,
+        unitPrice: item.unit_price,
+        priceMode: item.price_mode,
+      }));
+
+      const newItems = validatedData.orderItems.map(item => ({
+        productId: item.productId,
+        qtyCount: item.qtyCount,
+        qtyWeight: item.qtyWeight,
+        unitPrice: item.unitPrice,
+        priceMode: item.priceMode,
+      }));
+
+      // Sort items by productId for consistent comparison
+      const sortItems = (items: any[]) => items.sort((a: any, b: any) => a.productId.localeCompare(b.productId));
+      
+      // Normalize items by sorting and stringifying with consistent formatting
+      const currentItemString = JSON.stringify(sortItems(currentItems.map((item: any) => ({
+        ...item,
+        // Ensure numeric values are properly formatted
+        qtyCount: Number(item.qtyCount),
+        qtyWeight: Number(item.qtyWeight),
+        unitPrice: Number(item.unitPrice)
+      }))));
+      
+      const newItemString = JSON.stringify(sortItems(newItems.map((item: any) => ({
+        ...item,
+        // Ensure numeric values are properly formatted
+        qtyCount: Number(item.qtyCount),
+        qtyWeight: Number(item.qtyWeight),
+        unitPrice: Number(item.unitPrice)
+      }))));
+      
+      if (currentItemString !== newItemString) {
+        changes.push({
+          fieldName: 'orderItems',
+          oldValue: currentItemString,
+          newValue: newItemString
+        });
       }
     }
 
@@ -150,6 +235,27 @@ export async function PATCH(
     if (updateError) {
       console.error('Error updating order:', updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    // Save changes to history table
+    if (changes.length > 0) {
+      const historyRecords = changes.map(change => ({
+        order_id: id,
+        field_name: change.fieldName,
+        old_value: change.oldValue?.toString() || null,
+        new_value: change.newValue?.toString() || null,
+        changed_by: null, // In a real app, you would get this from the session
+        changed_at: new Date().toISOString()
+      }));
+
+      const { error: historyError } = await supabase
+        .from('order_history')
+        .insert(historyRecords);
+
+      if (historyError) {
+        console.error('Error saving order history:', historyError);
+        // Don't fail the whole request if history saving fails
+      }
     }
 
     // Handle inventory adjustments for order items if they changed

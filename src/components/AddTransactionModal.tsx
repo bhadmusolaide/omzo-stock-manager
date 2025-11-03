@@ -98,10 +98,10 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
           error={errors.amount?.message}
         />
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Type</label>
           <select
             {...register('type')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
           >
             <option value="">Select type</option>
             <option value="CREDIT">Credit (Income)</option>
@@ -110,10 +110,10 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
           {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Category</label>
           <select
             {...register('category')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
           >
             <option value="">Select category</option>
             <option value="DOC">DOC</option>
@@ -125,10 +125,10 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
           {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Linked Batch (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Linked Batch (Optional)</label>
           <select
             {...register('linkedBatchId')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
           >
             <option value="">Select batch</option>
             {batches.map((batch) => (
@@ -139,10 +139,10 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Linked Order (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Linked Order (Optional)</label>
           <select
             {...register('linkedOrderId')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
           >
             <option value="">Select order</option>
             {orders.map((order) => (

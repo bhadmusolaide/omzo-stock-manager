@@ -267,3 +267,20 @@ export async function softDeleteOrder(orderId: string, userId?: string) {
 
   return { success: true, orderId };
 }
+
+/**
+ * Get order history
+ */
+export async function getOrderHistory(orderId: string) {
+  const supabase = createClientServiceRole();
+
+  const { data: history, error } = await supabase
+    .from('order_history')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('changed_at', { ascending: false });
+
+  if (error) throw error;
+
+  return history;
+}

@@ -209,10 +209,10 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
             error={errors.orderDate?.message}
           />
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Linked Batch (Optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Linked Batch (Optional)</label>
             <select
               {...register('linkedBatchId')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
             >
               <option value="">Select batch</option>
               {batches.map((batch) => (
@@ -226,7 +226,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
 
         {/* Order Items */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Order Items</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Order Items</label>
           {fields.map((field, index) => {
             const selectedProductType = orderItems[index]?.productId;
             const inventory = selectedProductType ? getInventoryForProduct(selectedProductType) : null;
@@ -235,7 +235,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
               <div key={field.id} className="border p-4 rounded mb-2">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Product</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
                     <select
                       {...register(`orderItems.${index}.productId`)}
                       className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
@@ -254,7 +254,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Qty Count</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Count</label>
                     <input
                       type="number"
                       {...register(`orderItems.${index}.qtyCount`, { valueAsNumber: true })}
@@ -262,7 +262,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Qty Weight</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Weight</label>
                     <input
                       type="number"
                       step="0.01"
@@ -271,7 +271,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
                     <input
                       type="number"
                       step="0.01"
@@ -280,7 +280,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Price Mode</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Price Mode</label>
                     <select
                       {...register(`orderItems.${index}.priceMode`)}
                       className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
@@ -292,7 +292,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Subtotal</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
                   <p className="text-sm font-semibold">
                     {formatCurrency(
                       orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
@@ -334,11 +334,11 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Status</label>
             <p className={`text-sm font-medium ${
-              paymentStatus === 'PAID' ? 'text-green-600' :
-              paymentStatus === 'PARTIAL' ? 'text-yellow-600' :
-              'text-red-600'
+              paymentStatus === 'PAID' ? 'text-green-400 dark:text-green-300' :
+              paymentStatus === 'PARTIAL' ? 'text-yellow-400 dark:text-yellow-300' :
+              'text-red-400 dark:text-red-300'
             }`}>
               {paymentStatus}
             </p>
