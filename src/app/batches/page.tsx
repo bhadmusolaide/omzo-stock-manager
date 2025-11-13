@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import BatchStatusBadge from "@/components/ui/BatchStatusBadge";
@@ -14,6 +15,7 @@ import { useBatches, useDeleteBatch } from "@/features/batches/hooks/useBatches"
 import { useUiStore } from "@/store/ui";
 import { toast } from "@/store/toast";
 import { RefreshCw } from "lucide-react";
+import { createSupabaseClient } from '@/lib/supabase';
 
 interface Batch {
   id: string;
@@ -101,6 +103,30 @@ export default function Batches() {
   const { data: batchesData, isLoading, error, refetch } = useBatches();
   const batches = batchesData?.batches || batchesData || [];
 
+  // Fetch processing events to calculate total processed birds
+  const { data: processingData } = useQuery({
+    queryKey: ['processing-events'],
+    queryFn: async () => {
+      const supabase = createSupabaseClient();
+      const { data, error } = await supabase
+        .from('processing_events')
+        .select('live_birds_processed')
+        .eq('is_deleted', false);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Calculate summary metrics
+  const totalBatches = batches.length;
+  const activeBatches = batches.filter((b: Batch) => b.status !== 'CLOSED').length;
+  const totalBirds = batches.reduce((sum: number, b: Batch) => sum + (b.docPurchasedCount + b.docFreeCount), 0);
+  const totalMortality = batches.reduce((sum: number, b: Batch) => sum + b.totalMortality, 0);
+  const totalProcessed = processingData?.reduce((sum: number, p: { live_birds_processed: number }) => sum + p.live_birds_processed, 0) || 0;
+  const remainingBirds = batches
+    .filter((b: Batch) => b.status !== 'CLOSED')
+    .reduce((sum: number, b: Batch) => sum + b.currentLive, 0);
+
   // Update pagination state when data changes
   useEffect(() => {
     if (batchesData && typeof batchesData === 'object' && 'currentPage' in batchesData) {
@@ -185,24 +211,38 @@ export default function Batches() {
            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Batches</div>
-               <div className="text-2xl font-bold text-gray-900 dark:text-slate-100">{batches.length}</div>
+               <div className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalBatches}</div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Active Batches</div>
-               <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                 {batches.filter((b: Batch) => b.status !== 'CLOSED').length}
-               </div>
+               <div className="text-2xl font-bold text-green-600 dark:text-green-400">{activeBatches}</div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Birds</div>
-               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                 {batches.reduce((sum: number, b: Batch) => sum + (b.docPurchasedCount + b.docFreeCount), 0)}
-               </div>
+               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalBirds}</div>
+             </div>
+             <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
+               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Mortality</div>
+               <div className="text-2xl font-bold text-red-600 dark:text-red-400">{totalMortality}</div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Processing</div>
                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                  {batches.filter((b: Batch) => b.status === 'PROCESSING').length}
+               </div>
+             </div>
+             <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
+               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Processed Birds</div>
+               <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalProcessed}</div>
+             </div>
+             <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
+               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Remaining Birds</div>
+               <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{remainingBirds}</div>
+             </div>
+             <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
+               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Closed Batches</div>
+               <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
+                 {batches.filter((b: Batch) => b.status === 'CLOSED').length}
                </div>
              </div>
            </div>
