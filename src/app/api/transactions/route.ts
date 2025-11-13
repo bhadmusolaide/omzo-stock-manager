@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
           customer_name
         )
       `, { count: 'exact' })
-      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (type) {

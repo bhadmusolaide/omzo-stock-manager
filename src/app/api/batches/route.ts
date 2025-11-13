@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *
       `, { count: 'exact' })
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
