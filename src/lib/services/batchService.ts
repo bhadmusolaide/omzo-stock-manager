@@ -173,6 +173,26 @@ export async function softDeleteBatch(batchId: string, userId?: string) {
 
     console.log(`Batch found, proceeding with soft delete: ${existingBatch.name}`);
 
+    // Create reimbursement transaction before marking as deleted
+    const today = new Date().toISOString().split('T')[0];
+    const { error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        date: today,
+        description: `Batch Deletion Reimbursement: ${existingBatch.name}`,
+        amount: existingBatch.total_doc_cost || 0,
+        type: 'CREDIT',
+        category: 'DOC',
+        linked_batch_id: batchId,
+      });
+
+    if (transactionError) {
+      console.error('Error creating reimbursement transaction:', transactionError);
+      throw new Error(`Failed to create reimbursement transaction: ${transactionError.message}`);
+    }
+
+    console.log(`Created reimbursement transaction for ${existingBatch.total_doc_cost || 0}`);
+
     // Soft delete batch
     const { error: batchError } = await supabase
       .from('batches')
@@ -189,15 +209,14 @@ export async function softDeleteBatch(batchId: string, userId?: string) {
 
     console.log('Batch marked as deleted, updating related records...');
 
-    // Soft delete related records (continue even if some fail)
+    // Soft delete related records (only for tables that have is_deleted column)
     const updatePromises = [
       { table: 'batches', column: 'id', query: supabase.from('batches').update({ is_deleted: true, updated_by: userId }).eq('id', batchId) },
       { table: 'feed_purchases', column: 'batch_id', query: supabase.from('feed_purchases').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'feed_usages', column: 'batch_id', query: supabase.from('feed_usages').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
-      { table: 'mortality_records', column: 'batch_id', query: supabase.from('mortality_records').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
-      { table: 'expenses', column: 'batch_id', query: supabase.from('expenses').update({ is_deleted: true, updated_by: userId }).eq('batch_id', batchId) },
       { table: 'transactions', column: 'linked_batch_id', query: supabase.from('transactions').update({ is_deleted: true, updated_by: userId }).eq('linked_batch_id', batchId) },
       { table: 'orders', column: 'linked_batch_id', query: supabase.from('orders').update({ is_deleted: true, updated_by: userId }).eq('linked_batch_id', batchId) },
+      { table: 'dressed_inventory', column: 'batch_id', query: supabase.from('dressed_inventory').update({ is_deleted: true }).eq('batch_id', batchId) },
     ];
 
     console.log('Updating related records...');

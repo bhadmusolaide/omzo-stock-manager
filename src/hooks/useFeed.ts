@@ -21,6 +21,14 @@ const deleteFeedPurchase = async (id: string) => {
   return apiClient.delete(`/api/feed/${id}`);
 };
 
+const fetchTotalFeedUsed = async () => {
+  return apiClient.get('/api/feed-usage');
+};
+
+const fetchBatchFeedStats = async (batchId: string) => {
+  return apiClient.get(`/api/batches/${batchId}/feed-stats`);
+};
+
 export const useFeedPurchases = (batchId?: string) => {
   return useQuery({
     queryKey: ['feedPurchases', batchId],
@@ -45,6 +53,8 @@ export const useCreateFeedPurchase = () => {
     mutationFn: createFeedPurchase,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feedPurchases'] });
+      queryClient.invalidateQueries({ queryKey: ['totalFeedUsed'] });
+      queryClient.invalidateQueries({ queryKey: ['batchFeedStats'] });
     },
   });
 };
@@ -55,6 +65,8 @@ export const useUpdateFeedPurchase = () => {
     mutationFn: updateFeedPurchase,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feedPurchases'] });
+      queryClient.invalidateQueries({ queryKey: ['totalFeedUsed'] });
+      queryClient.invalidateQueries({ queryKey: ['batchFeedStats'] });
     },
   });
 };
@@ -65,6 +77,41 @@ export const useDeleteFeedPurchase = () => {
     mutationFn: deleteFeedPurchase,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feedPurchases'] });
+      queryClient.invalidateQueries({ queryKey: ['totalFeedUsed'] });
+      queryClient.invalidateQueries({ queryKey: ['batchFeedStats'] });
     },
+  });
+};
+
+export const useTotalFeedUsed = () => {
+  return useQuery({
+    queryKey: ['totalFeedUsed'],
+    queryFn: fetchTotalFeedUsed,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && 'status' in error && typeof error.status === 'number') {
+        if (error.status >= 400 && error.status < 500) {
+          return false;
+        }
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+};
+
+export const useBatchFeedStats = (batchId: string) => {
+  return useQuery({
+    queryKey: ['batchFeedStats', batchId],
+    queryFn: () => fetchBatchFeedStats(batchId),
+    enabled: !!batchId,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && 'status' in error && typeof error.status === 'number') {
+        if (error.status >= 400 && error.status < 500) {
+          return false;
+        }
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };

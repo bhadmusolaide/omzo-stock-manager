@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import BatchStatusBadge from "@/components/ui/BatchStatusBadge";
@@ -88,7 +88,7 @@ export default function Batches() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setDeleteBatch(true, row.id)}
+            onClick={() => handleDeleteClick(row.id)}
             className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 border-red-200 dark:border-red-600 hover:border-red-300 dark:hover:border-red-500 transition-colors duration-300"
           >
             Delete
@@ -149,6 +149,10 @@ export default function Batches() {
   const handleDeleteCancel = () => {
     setDeleteBatch(false, null);
   };
+
+  const handleDeleteClick = useCallback((id: string) => {
+    setDeleteBatch(true, id);
+  }, [setDeleteBatch]);
 
   if (isLoading) {
     return <Loading text="Loading batches..." className="p-6" />;

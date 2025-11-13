@@ -9,7 +9,7 @@ import AddFeedModal from "@/features/feed/components/AddFeedModal";
 import EditFeedModal from "@/features/feed/components/EditFeedModal";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { formatCurrency } from "@/utils/currency";
-import { useFeedPurchases, useDeleteFeedPurchase } from "@/features/feed/hooks/useFeed";
+import { useFeedPurchases, useDeleteFeedPurchase, useTotalFeedUsed, useBatchFeedStats } from "@/features/feed/hooks/useFeed";
 import { useUiStore } from "@/store/ui";
 import { toast } from "@/store/toast";
 import { useBatches } from "@/hooks/useBatches";
@@ -84,6 +84,11 @@ export default function Feed() {
   const { data: batchesData } = useBatches();
   const batches = batchesData?.batches || batchesData || [];
   const deleteFeedMutation = useDeleteFeedPurchase();
+
+  const { data: totalFeedUsedData } = useTotalFeedUsed();
+  const totalUsed = totalFeedUsedData?.totalUsed || 0;
+  const { data: batchFeedStatsData } = useBatchFeedStats(filters.batchId);
+  const batchRemaining = batchFeedStatsData?.remaining || 0;
 
   const columns = [
     {
@@ -208,6 +213,7 @@ export default function Feed() {
   const totalFeedCost = feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.total_cost || 0), 0) || 0;
   const avgCostPerKg = totalFeedKg > 0 ? totalFeedCost / totalFeedKg : 0;
   const feedTypes = [...new Set(feedPurchases?.map((p: FeedPurchase) => p.feed_type).filter(Boolean) || [])];
+  const remainingFeeds = filters.batchId ? batchRemaining : (totalFeedKg - totalUsed);
 
   return (
     <div className="max-w-7xl mx-auto p-6 transition-colors duration-300">
@@ -250,7 +256,7 @@ export default function Feed() {
 
          {/* Summary Cards */}
          {feedPurchases && feedPurchases.length > 0 && (
-           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6">
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Feed</div>
                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalFeedKg.toFixed(1)} kg</div>
@@ -266,6 +272,10 @@ export default function Feed() {
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Feed Types</div>
                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{feedTypes.length}</div>
+             </div>
+             <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
+               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Remaining Feeds (KG)</div>
+               <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{remainingFeeds.toFixed(1)} kg</div>
              </div>
            </div>
          )}

@@ -66,30 +66,11 @@ export const useCreateBatch = () => {
   return useMutation({
     mutationFn: createBatch,
     onSuccess: (newBatch) => {
-      // Transform returned snake_case batch to camelCase to match query data
-      const transformedBatch = {
-        id: newBatch.id,
-        name: newBatch.name,
-        docPurchasedCount: newBatch.doc_purchased_count,
-        docFreeCount: newBatch.doc_free_count,
-        totalDocCost: newBatch.total_doc_cost,
-        initialChickCount: newBatch.initial_chick_count,
-        currentLive: newBatch.current_live,
-        totalMortality: newBatch.total_mortality,
-        totalWeightKg: newBatch.total_weight_kg,
-        effectiveUnitCost: newBatch.effective_unit_cost,
-        startDate: newBatch.start_date,
-        status: newBatch.status,
-        notes: newBatch.notes,
-        createdAt: newBatch.created_at,
-        updatedAt: newBatch.updated_at,
-      };
-
-      // Optimistically update cache with new batch
-      queryClient.setQueryData(['batches'], (old: Record<string, unknown>[] = []) => [...old, transformedBatch]);
-
-      // Also invalidate to ensure consistency on next fetch
+      // Invalidate to ensure consistency on next fetch
       queryClient.invalidateQueries({ queryKey: ['batches'] });
+    },
+    onError: (error) => {
+      console.error('Batch creation error:', error);
     },
   });
 };
@@ -110,6 +91,9 @@ export const useDeleteBatch = () => {
     mutationFn: deleteBatch,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['batches'] });
+    },
+    onError: (error) => {
+      console.error('Batch deletion error:', error);
     },
   });
 };
