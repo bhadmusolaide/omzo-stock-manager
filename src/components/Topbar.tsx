@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, Moon, Sun, Bell, User, Wallet, CreditCard } from 'lucide-react';
+import { Search, Moon, Sun, Bell, User, Wallet, CreditCard, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { motion } from 'framer-motion';
 import { useOverviewMetrics } from '@/features/reports/hooks/useReports';
@@ -38,13 +38,10 @@ const Topbar = () => {
     setTheme(isDark ? 'light' : 'dark');
   };
 
-  // Filter to only show recent pending payments (last 7 days)
-  const recentPendingPayments = pendingPayments.filter(payment => {
-    const paymentDate = new Date(payment.orderDate);
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    return paymentDate >= sevenDaysAgo;
-  });
+  // Filter to only show PENDING and PARTIAL payments
+  const pendingPaymentItems = pendingPayments.filter(payment => 
+    payment.paymentStatus === 'PENDING' || payment.paymentStatus === 'PARTIAL'
+  );
 
   return (
     <header className="border-b border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center shadow-sm">
@@ -103,9 +100,9 @@ const Topbar = () => {
             onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
           >
             <Bell size={20} className="text-gray-600 dark:text-gray-400" />
-            {recentPendingPayments.length > 0 && (
+            {pendingPaymentItems.length > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                {recentPendingPayments.length}
+                {pendingPaymentItems.length}
               </span>
             )}
           </motion.button>
@@ -119,20 +116,24 @@ const Topbar = () => {
               className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 z-50"
             >
               <div className="p-4 border-b border-gray-200 dark:border-slate-700">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
-                {recentPendingPayments.length > 0 && (
+                <h3 className="font-semibold text-gray-900 dark:text-white">Pending Payments</h3>
+                {pendingPaymentItems.length > 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {recentPendingPayments.length} pending payment{recentPendingPayments.length !== 1 ? 's' : ''}
+                    {pendingPaymentItems.length} pending payment{pendingPaymentItems.length !== 1 ? 's' : ''} requiring attention
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No pending payments
                   </p>
                 )}
               </div>
               
               <div className="max-h-96 overflow-y-auto">
-                {recentPendingPayments.length > 0 ? (
-                  recentPendingPayments.map((payment) => (
+                {pendingPaymentItems.length > 0 ? (
+                  pendingPaymentItems.map((payment) => (
                     <div 
                       key={payment.id} 
-                      className="p-4 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer"
+                      className="p-4 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50"
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-1 p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -151,11 +152,20 @@ const Topbar = () => {
                             {payment.customerName}
                           </p>
                           <div className="flex justify-between items-center mt-2">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatCurrency(payment.balanceDue)}
-                            </span>
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                              Pending
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {formatCurrency(payment.balanceDue)}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Paid: {formatCurrency(payment.amountPaid)} of {formatCurrency(payment.totalAmount)}
+                              </div>
+                            </div>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              payment.paymentStatus === 'PENDING' 
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' 
+                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                            }`}>
+                              {payment.paymentStatus}
                             </span>
                           </div>
                         </div>
@@ -164,23 +174,22 @@ const Topbar = () => {
                   ))
                 ) : (
                   <div className="p-8 text-center">
-                    <Bell className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No notifications</h3>
+                    <div className="mx-auto bg-gray-100 dark:bg-slate-700 rounded-full p-3 w-12 h-12 flex items-center justify-center mb-4">
+                      <AlertCircle className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">All caught up!</h3>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      You're all caught up!
+                      No pending payments right now.
                     </p>
                   </div>
                 )}
               </div>
               
-              {recentPendingPayments.length > 0 && (
-                <div className="p-3 bg-gray-50 dark:bg-slate-700/50 text-center">
-                  <button 
-                    className="text-sm font-medium text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300"
-                    onClick={() => setIsNotificationsOpen(false)}
-                  >
-                    View all pending payments
-                  </button>
+              {pendingPaymentItems.length > 0 && (
+                <div className="p-3 bg-gray-50 dark:bg-slate-700/50 text-center border-t border-gray-200 dark:border-slate-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Click on payments in the Orders section to mark as paid
+                  </p>
                 </div>
               )}
             </motion.div>

@@ -103,7 +103,10 @@ export default function Orders() {
     fetchOrders(1);
     fetch('/api/batches')
       .then((response) => response.json())
-      .then((data) => setBatches(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+        setBatches(batchesArray);
+      })
       .catch((error) => console.error('Error fetching batches:', error));
   }, [filters]);
 

@@ -86,6 +86,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
   });
 
   const orderItems = watch('orderItems') as OrderFormData['orderItems'];
+  const linkedBatchId = watch('linkedBatchId');
   const totalAmount = orderItems.reduce((sum, item) => {
     const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
                     item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
@@ -107,7 +108,11 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
           setBatches(batchesArray);
         })
         .catch((error) => logger.error('Error fetching batches:', error));
-      
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
       // Fetch dressed inventory products
       fetch('/api/dressed_inventory')
         .then((response) => response.json())

@@ -101,11 +101,21 @@ export async function PATCH(
       effective_unit_cost = newPurchased > 0 ? newTotalCost / newPurchased : 0;
     }
 
-    // Compute new current_live if totalMortality provided
-    let current_live: number | undefined = existingBatch.current_live || 0;
-    if (validatedData.totalMortality !== undefined) {
+    // Handle current_live updates carefully to preserve processing deductions
+    let current_live: number | undefined;
+
+    // If currentLive is explicitly provided, use it
+    if (validatedData.currentLive !== undefined) {
+      current_live = validatedData.currentLive;
+    }
+    // Only recalculate current_live if totalMortality is being updated AND currentLive wasn't explicitly set
+    else if (validatedData.totalMortality !== undefined && validatedData.totalMortality !== existingBatch.total_mortality) {
       const initialCount = initial_chick_count ?? (existingBatch.initial_chick_count || 0);
       current_live = Math.max(0, initialCount - validatedData.totalMortality);
+    }
+    // Otherwise, preserve the existing current_live value
+    else {
+      current_live = existingBatch.current_live || 0;
     }
 
     const updatePayload: Record<string, unknown> = {

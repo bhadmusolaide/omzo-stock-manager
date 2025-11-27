@@ -13,15 +13,18 @@ interface PendingOrder {
 }
 
 const fetchPendingPayments = async (): Promise<PendingOrder[]> => {
-  // Fetch both PENDING and PARTIAL orders
-  const [pendingOrders, partialOrders] = await Promise.all([
-    apiClient.get('/api/orders?status=PENDING'),
-    apiClient.get('/api/orders?status=PARTIAL')
-  ]);
-
-  // Combine and sort by order date (newest first)
-  const allOrders = [...pendingOrders, ...partialOrders];
-  return allOrders.sort((a, b) => 
+  // Fetch both PENDING and PARTIAL orders in a single request
+  // This is more efficient and avoids potential race conditions
+  const response = await apiClient.get('/api/orders');
+  
+  // Filter client-side to get only PENDING and PARTIAL orders
+  const allOrders = response.orders || response;
+  const pendingOrders = allOrders.filter((order: any) => 
+    order.paymentStatus === 'PENDING' || order.paymentStatus === 'PARTIAL'
+  );
+  
+  // Sort by order date (newest first)
+  return pendingOrders.sort((a: any, b: any) => 
     new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
   );
 };
@@ -31,5 +34,7 @@ export const usePendingPayments = () => {
     queryKey: ['pendingPayments'],
     queryFn: fetchPendingPayments,
     refetchInterval: 30000, // Refetch every 30 seconds
+    // Add stale time to prevent too frequent refetching
+    staleTime: 10000,
   });
 };

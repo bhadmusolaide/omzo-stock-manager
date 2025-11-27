@@ -56,7 +56,10 @@ export default function AddFeedModal({ isOpen, onClose, onSuccess }: AddFeedModa
     if (isOpen) {
       fetch('/api/batches')
         .then((response) => response.json())
-        .then((data) => setBatches(data))
+        .then((data) => {
+          const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+          setBatches(batchesArray);
+        })
         .catch((error) => console.error('Error fetching batches:', error));
     }
   }, [isOpen]);

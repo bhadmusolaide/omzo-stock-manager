@@ -18,6 +18,7 @@ const createOrderSchema = z.object({
      unitPrice: z.number().positive('Unit price must be greater than 0'),
      priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
    })),
+   overrideValidation: z.boolean().optional(),
  });
 
 export async function GET(request: NextRequest) {
@@ -157,6 +158,40 @@ export async function POST(request: NextRequest) {
     // Calculate balance due
     const balanceDue = validatedData.totalAmount - validatedData.amountPaid;
 
+    // Validate inventory before inserting order
+    if (validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '' && !validatedData.overrideValidation) {
+      for (const item of validatedData.orderItems) {
+        const deductCount = (item.priceMode === 'COUNT' || item.priceMode === 'COUNT_KG') ? item.qtyCount : 0;
+        const deductWeight = (item.priceMode === 'KG' || item.priceMode === 'COUNT_KG') ? item.qtyWeight : 0;
+
+        if (deductCount > 0 || deductWeight > 0) {
+          // Aggregate inventory for the product type and batch
+          const supabase = createClientServiceRole();
+          const { data: inventoryList, error: fetchError } = await supabase
+            .from('dressed_inventory')
+            .select('*')
+            .eq('product_type', item.productId)
+            .eq('batch_id', validatedData.linkedBatchId)
+            .order('updated_at', { ascending: false });
+
+          if (fetchError) throw fetchError;
+
+          // Aggregate available inventory from all entries
+          const totalAvailableCount = inventoryList?.reduce((sum, inv) => sum + (inv.available_count || 0), 0) || 0;
+          const totalAvailableWeight = inventoryList?.reduce((sum, inv) => sum + (inv.available_weight_kg || 0), 0) || 0;
+
+          // Implement strict inventory validation
+          if (deductCount > 0 && totalAvailableCount < deductCount) {
+            return NextResponse.json({ error: `Insufficient count inventory for ${item.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}.` }, { status: 400 });
+          }
+
+          if (deductWeight > 0 && totalAvailableWeight < deductWeight) {
+            return NextResponse.json({ error: `Insufficient weight inventory for ${item.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg.` }, { status: 400 });
+          }
+        }
+      }
+    }
+
     // Insert order
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -227,7 +262,7 @@ export async function POST(request: NextRequest) {
     if (validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '') {
       for (const item of validatedData.orderItems) {
         const deductCount = (item.priceMode === 'COUNT' || item.priceMode === 'COUNT_KG') ? item.qtyCount : 0;
-        const deductWeight = item.priceMode === 'KG' ? item.qtyWeight : 0;
+        const deductWeight = (item.priceMode === 'KG' || item.priceMode === 'COUNT_KG') ? item.qtyWeight : 0;
 
         if (deductCount > 0 || deductWeight > 0) {
           // Aggregate inventory for the product type and batch
@@ -239,19 +274,6 @@ export async function POST(request: NextRequest) {
             .order('updated_at', { ascending: false });
 
           if (fetchError) throw fetchError;
-
-          // Aggregate available inventory from all entries
-          const totalAvailableCount = inventoryList?.reduce((sum, inv) => sum + (inv.available_count || 0), 0) || 0;
-          const totalAvailableWeight = inventoryList?.reduce((sum, inv) => sum + (inv.available_weight_kg || 0), 0) || 0;
-
-          // Implement strict inventory validation
-          if (deductCount > 0 && totalAvailableCount < deductCount) {
-            return NextResponse.json({ error: `Insufficient count inventory for ${item.productId}. Available: ${totalAvailableCount}, Required: ${deductCount}.` }, { status: 400 });
-          }
-
-          if (deductWeight > 0 && totalAvailableWeight < deductWeight) {
-            return NextResponse.json({ error: `Insufficient weight inventory for ${item.productId}. Available: ${totalAvailableWeight}kg, Required: ${deductWeight}kg.` }, { status: 400 });
-          }
 
           // Deduct from inventory entries, starting from the most recently updated
           let remainingCountToDeduct = deductCount;
@@ -280,11 +302,14 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // If there's still remaining to deduct, it means we have a logic error since we already validated
-          // This should never happen with proper validation, but let's add a safeguard
+          // If there's still remaining to deduct, it means we have insufficient inventory
           if (remainingCountToDeduct > 0 || remainingWeightToDeduct > 0) {
-            console.error(`Logic error: Still have remaining amounts to deduct after processing all inventory: count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
-            return NextResponse.json({ error: `Internal error: Insufficient inventory for ${item.productId} despite passing validation.` }, { status: 500 });
+            if (validatedData.overrideValidation) {
+              console.log(`Override enabled: Allowing order creation with insufficient inventory for ${item.productId}`);
+            } else {
+              console.error(`Insufficient inventory for ${item.productId}: remaining count=${remainingCountToDeduct}, weight=${remainingWeightToDeduct}`);
+              return NextResponse.json({ error: `Internal error: Insufficient inventory for ${item.productId}.` }, { status: 500 });
+            }
           }
         }
       }

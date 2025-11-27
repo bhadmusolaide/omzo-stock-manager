@@ -28,6 +28,7 @@ const orderSchema = z.object({
   amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
   linkedBatchId: z.string().optional(),
   orderItems: z.array(orderItemSchema),
+  overrideValidation: z.boolean().optional(), // Added override validation field
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
@@ -57,6 +58,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
   const [batches, setBatches] = useState<Batch[]>([]);
   const [products, setProducts] = useState<DressedInventoryItem[]>([]);
   const [batchInventory, setBatchInventory] = useState<Record<string, DressedInventoryItem[]>>({});
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const createOrder = useCreateOrder();
 
   const {
@@ -170,6 +172,7 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
   };
 
   const onSubmit = async (data: OrderFormData) => {
+    setErrorMessage('');
     try {
       // Remove orderNumber from payload since it's auto-generated
       const { orderNumber, ...payloadData } = data;
@@ -178,13 +181,19 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
       reset();
       onClose();
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating order:', error);
+      setErrorMessage(error.message || 'Failed to create order');
     }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add New Order">
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded">
+          {errorMessage}
+        </div>
+      )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
@@ -221,6 +230,20 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Override validation toggle - integrated into the grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              {...register('overrideValidation')}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+              Override inventory validation
+            </label>
           </div>
         </div>
 
