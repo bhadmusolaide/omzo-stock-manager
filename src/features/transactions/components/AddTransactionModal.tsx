@@ -150,7 +150,7 @@ export default function AddTransactionModal({ isOpen, onClose, onSuccess }: AddT
             <select
               {...register('linkedBatchId')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
-              disabled={selectedCategory !== 'FEED'}
+              disabled={selectedCategory !== 'FEED' && selectedCategory !== 'EXPENSE'}
             >
               <option value="">Select batch</option>
               {batches.map((batch) => (
