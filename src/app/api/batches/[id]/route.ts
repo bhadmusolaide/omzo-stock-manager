@@ -90,6 +90,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
 
+    // Fetch total processed birds for this batch
+    const { data: processingData, error: processingError } = await supabase
+      .from('processing_events')
+      .select('live_birds_processed')
+      .eq('batch_id', id);
+
+    if (processingError) throw processingError;
+    const totalProcessed = processingData?.reduce((sum, event) => sum + event.live_birds_processed, 0) || 0;
+
     // Compute new initial_chick_count and effective_unit_cost if doc counts or cost provided
     let initial_chick_count: number | undefined = existingBatch.initial_chick_count || 0;
     let effective_unit_cost: number | undefined = existingBatch.effective_unit_cost || 0;
@@ -104,14 +113,14 @@ export async function PATCH(
     // Handle current_live updates carefully to preserve processing deductions
     let current_live: number | undefined;
 
-    // If currentLive is explicitly provided, use it
-    if (validatedData.currentLive !== undefined) {
-      current_live = validatedData.currentLive;
-    }
-    // Only recalculate current_live if totalMortality is being updated AND currentLive wasn't explicitly set
-    else if (validatedData.totalMortality !== undefined && validatedData.totalMortality !== existingBatch.total_mortality) {
+    // If totalMortality is being updated, recalculate current_live to account for the change
+    if (validatedData.totalMortality !== undefined && validatedData.totalMortality !== existingBatch.total_mortality) {
       const initialCount = initial_chick_count ?? (existingBatch.initial_chick_count || 0);
-      current_live = Math.max(0, initialCount - validatedData.totalMortality);
+      current_live = Math.max(0, initialCount - validatedData.totalMortality - totalProcessed);
+    }
+    // If currentLive is explicitly provided and mortality wasn't changed, use it
+    else if (validatedData.currentLive !== undefined) {
+      current_live = validatedData.currentLive;
     }
     // Otherwise, preserve the existing current_live value
     else {

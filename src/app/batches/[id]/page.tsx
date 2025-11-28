@@ -86,6 +86,8 @@ export default function BatchDetail() {
     avgWeightKg: 0,
     notes: '',
   });
+  const [editingWeighing, setEditingWeighing] = useState<Weighing | null>(null);
+  const [editingFeedUsage, setEditingFeedUsage] = useState<FeedUsage | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -233,6 +235,113 @@ export default function BatchDetail() {
     }
   };
 
+  const handleEditWeighing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingWeighing) return;
+
+    try {
+      const response = await fetch(`/api/batches/${batchId}/weighings/${editingWeighing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          takenAt: editingWeighing.takenAt,
+          sampleCount: editingWeighing.sampleCount,
+          avgWeightKg: editingWeighing.avgWeightKg,
+          notes: editingWeighing.notes,
+        }),
+      });
+      if (response.ok) {
+        setEditingWeighing(null);
+        fetchWeighings();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to update weighing');
+      }
+    } catch (err) {
+      logger.error('Failed to update weighing:', err);
+    }
+  };
+
+  const handleDeleteWeighing = async (weighingId: string) => {
+    if (!confirm('Are you sure you want to delete this weighing?')) return;
+
+    try {
+      const response = await fetch(`/api/batches/${batchId}/weighings/${weighingId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        fetchWeighings();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to delete weighing');
+      }
+    } catch (err) {
+      logger.error('Failed to delete weighing:', err);
+    }
+  };
+
+  const startEditing = (weighing: Weighing) => {
+    setEditingWeighing({ ...weighing });
+    setShowAddWeighing(false);
+  };
+
+  const cancelEditing = () => {
+    setEditingWeighing(null);
+  };
+
+  const handleEditFeedUsage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFeedUsage) return;
+
+    try {
+      const response = await fetch(`/api/batches/${batchId}/feed-usages/${editingFeedUsage.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedId: editingFeedUsage.feed_id,
+          kg: editingFeedUsage.kg,
+          date: editingFeedUsage.date,
+          notes: editingFeedUsage.notes,
+        }),
+      });
+      if (response.ok) {
+        setEditingFeedUsage(null);
+        fetchFeedData();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to update feed usage');
+      }
+    } catch (err) {
+      logger.error('Failed to update feed usage:', err);
+    }
+  };
+
+  const handleDeleteFeedUsage = async (feedUsageId: string) => {
+    if (!confirm('Are you sure you want to delete this feed usage record?')) return;
+
+    try {
+      const response = await fetch(`/api/batches/${batchId}/feed-usages/${feedUsageId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        fetchFeedData();
+      } else {
+        const err = await response.json();
+        setError(err.error || 'Failed to delete feed usage');
+      }
+    } catch (err) {
+      logger.error('Failed to delete feed usage:', err);
+    }
+  };
+
+  const startEditingFeedUsage = (feedUsage: FeedUsage) => {
+    setEditingFeedUsage({ ...feedUsage });
+  };
+
+  const cancelEditingFeedUsage = () => {
+    setEditingFeedUsage(null);
+  };
+
   if (loading) return <Loading text="Loading batch details..." className="p-6" />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!batch) return <div className="p-6">Batch not found</div>;
@@ -342,9 +451,16 @@ export default function BatchDetail() {
               <CardTitle>Feed Management</CardTitle>
               <div className="flex justify-between">
                 <p>Track feed consumption for this batch</p>
-                <Button onClick={() => setShowFeedUsage(true)}>
-                  Record Feed Usage
-                </Button>
+                <div className="flex gap-2">
+                  {editingFeedUsage && (
+                    <Button variant="outline" onClick={cancelEditingFeedUsage}>
+                      Cancel Edit
+                    </Button>
+                  )}
+                  <Button onClick={() => setShowFeedUsage(true)}>
+                    Record Feed Usage
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -358,6 +474,7 @@ export default function BatchDetail() {
                       <th className="border p-2">KG Used</th>
                       <th className="border p-2">Supplier</th>
                       <th className="border p-2">Notes</th>
+                      <th className="border p-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -369,6 +486,26 @@ export default function BatchDetail() {
                         <td className="border p-2">{usage.kg.toFixed(2)}</td>
                         <td className="border p-2">{usage.feed_purchases?.supplier || 'N/A'}</td>
                         <td className="border p-2">{usage.notes || '-'}</td>
+                        <td className="border p-2">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => startEditingFeedUsage(usage)}
+                              className="text-xs"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteFeedUsage(usage.id)}
+                              className="text-xs text-red-600 hover:text-red-700"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -378,6 +515,42 @@ export default function BatchDetail() {
               )}
             </CardContent>
           </Card>
+          {editingFeedUsage && (
+            <Card>
+              <CardContent className="pt-6">
+                <form onSubmit={handleEditFeedUsage} className="space-y-2">
+                  <h3 className="text-lg font-semibold">Edit Feed Usage</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      type="date"
+                      value={editingFeedUsage.date.split('T')[0]}
+                      onChange={(e) => setEditingFeedUsage({ ...editingFeedUsage, date: e.target.value })}
+                      placeholder="Date"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingFeedUsage.kg}
+                      onChange={(e) => setEditingFeedUsage({ ...editingFeedUsage, kg: parseFloat(e.target.value) })}
+                      placeholder="KG Used"
+                      min="0"
+                    />
+                  </div>
+                  <Input
+                    value={editingFeedUsage.notes || ''}
+                    onChange={(e) => setEditingFeedUsage({ ...editingFeedUsage, notes: e.target.value })}
+                    placeholder="Notes"
+                  />
+                  <div className="flex gap-2">
+                    <Button type="submit">Update Feed Usage</Button>
+                    <Button type="button" variant="outline" onClick={cancelEditingFeedUsage}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="growth" className="mt-4 space-y-4">
@@ -386,9 +559,16 @@ export default function BatchDetail() {
               <CardTitle>Growth Weighings</CardTitle>
               <div className="flex justify-between">
                 <p>Total Weighings: {weighings.length}</p>
-                <Button onClick={() => setShowAddWeighing(!showAddWeighing)}>
-                  {showAddWeighing ? 'Cancel' : 'Add Weighing'}
-                </Button>
+                <div className="flex gap-2">
+                  {editingWeighing && (
+                    <Button variant="outline" onClick={cancelEditing}>
+                      Cancel Edit
+                    </Button>
+                  )}
+                  <Button onClick={() => setShowAddWeighing(!showAddWeighing)}>
+                    {showAddWeighing ? 'Cancel' : 'Add Weighing'}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             {showAddWeighing && (
@@ -424,6 +604,45 @@ export default function BatchDetail() {
                 </form>
               </CardContent>
             )}
+            {editingWeighing && (
+              <CardContent>
+                <form onSubmit={handleEditWeighing} className="space-y-2">
+                  <h3 className="text-lg font-semibold">Edit Weighing</h3>
+                  <Input
+                    type="date"
+                    value={editingWeighing.takenAt.split('T')[0]}
+                    onChange={(e) => setEditingWeighing({ ...editingWeighing, takenAt: e.target.value })}
+                    placeholder="Date"
+                  />
+                  <Input
+                    type="number"
+                    value={editingWeighing.sampleCount}
+                    onChange={(e) => setEditingWeighing({ ...editingWeighing, sampleCount: parseInt(e.target.value) })}
+                    placeholder="Sample Count"
+                    min="1"
+                  />
+                  <Input
+                    type="number"
+                    step="0.001"
+                    value={editingWeighing.avgWeightKg}
+                    onChange={(e) => setEditingWeighing({ ...editingWeighing, avgWeightKg: parseFloat(e.target.value) })}
+                    placeholder="Average Weight (kg)"
+                    min="0"
+                  />
+                  <Input
+                    value={editingWeighing.notes || ''}
+                    onChange={(e) => setEditingWeighing({ ...editingWeighing, notes: e.target.value })}
+                    placeholder="Notes"
+                  />
+                  <div className="flex gap-2">
+                    <Button type="submit">Update Weighing</Button>
+                    <Button type="button" variant="outline" onClick={cancelEditing}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            )}
             <CardContent>
               {weighings.length > 0 ? (
                 <div className="space-y-4">
@@ -436,6 +655,7 @@ export default function BatchDetail() {
                         <th className="border p-2">Avg Weight (kg)</th>
                         <th className="border p-2">Total Sample Weight (kg)</th>
                         <th className="border p-2">Notes</th>
+                        <th className="border p-2">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -446,6 +666,26 @@ export default function BatchDetail() {
                           <td className="border p-2">{w.avgWeightKg.toFixed(3)}</td>
                           <td className="border p-2">{w.totalSampleWeightKg.toFixed(3)}</td>
                           <td className="border p-2">{w.notes}</td>
+                          <td className="border p-2">
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => startEditing(w)}
+                                className="text-xs"
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDeleteWeighing(w.id)}
+                                className="text-xs text-red-600 hover:text-red-700"
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

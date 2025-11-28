@@ -8,6 +8,7 @@ const updateSettingsSchema = z.object({
   feedConversionPresets: z.string().optional(),
   lowStockThreshold: z.number().nonnegative().optional(),
   companyName: z.string().optional(),
+  showAiInsights: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -30,6 +31,7 @@ export async function GET() {
         lowStockThreshold: 50,
         companyName: 'Omzo Farmz',
         allocationMode: 'per_bird',
+        showAiInsights: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -53,6 +55,7 @@ export async function GET() {
           lowStockThreshold: 50,
           companyName: 'Omzo Farmz',
           allocationMode: 'per_bird',
+          showAiInsights: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -69,6 +72,7 @@ export async function GET() {
       lowStockThreshold: (settings as any)?.low_stock_threshold,
       companyName: (settings as any)?.company_name,
       allocationMode: (settings as any)?.allocation_mode,
+      showAiInsights: (settings as any)?.show_ai_insights ?? true,
       createdAt: (settings as any)?.created_at,
       updatedAt: (settings as any)?.updated_at,
     });
@@ -139,6 +143,7 @@ export async function PATCH(request: NextRequest) {
       ...(validatedData.feedConversionPresets !== undefined && { feed_conversion_presets: validatedData.feedConversionPresets }),
       ...(validatedData.lowStockThreshold !== undefined && { low_stock_threshold: validatedData.lowStockThreshold }),
       ...(validatedData.companyName !== undefined && { company_name: validatedData.companyName }),
+      ...(validatedData.showAiInsights !== undefined && { show_ai_insights: validatedData.showAiInsights }),
     };
 
     let settings;
@@ -178,6 +183,7 @@ export async function PATCH(request: NextRequest) {
       lowStockThreshold: (settings as any)?.low_stock_threshold,
       companyName: (settings as any)?.company_name,
       allocationMode: (settings as any)?.allocation_mode,
+      showAiInsights: (settings as any)?.show_ai_insights ?? true,
       createdAt: (settings as any)?.created_at,
       updatedAt: (settings as any)?.updated_at,
     });

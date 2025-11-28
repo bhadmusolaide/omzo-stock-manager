@@ -24,6 +24,13 @@ export async function GET() {
         transactions (*)
       `);
 
+    // Get outstanding order balance
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('balance_due, payment_status')
+      .neq('payment_status', 'PAID')
+      .eq('is_deleted', false);
+
     if (batchesError) {
       console.error('Error fetching batches:', batchesError);
       return NextResponse.json({ error: batchesError.message }, { status: 500 });
@@ -71,16 +78,20 @@ export async function GET() {
 
     const avgFeedCostPerKg = totalFeedKg > 0 ? totalFeedCost / totalFeedKg : 0;
 
+    // Calculate outstanding order balance
+    const outstandingOrderBalance = orders ? orders.reduce((sum: number, order: any) => sum + (order.balance_due || 0), 0) : 0;
+
     return NextResponse.json({
       totalIncome,
       totalExpenses,
       overallProfit,
       mortalityRate: parseFloat(mortalityRate.toFixed(2)),
       avgFeedCostPerKg: parseFloat(avgFeedCostPerKg.toFixed(2)),
-      batchCount: batches.length,
+      batchCount: batches.filter((b: any) => b.status !== 'CLOSED').length,
       totalFeedKg,
       assignedFeedKg,
       remainingFeedKg,
+      outstandingOrderBalance,
     });
   } catch (error) {
     console.error('Error fetching overview:', error);

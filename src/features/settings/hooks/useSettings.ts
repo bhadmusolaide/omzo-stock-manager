@@ -7,6 +7,7 @@ export interface Settings {
   feedConversionPresets: string;
   lowStockThreshold: number;
   companyName: string;
+  showAiInsights: boolean;
   createdAt: string;
   updatedAt: string;
 }

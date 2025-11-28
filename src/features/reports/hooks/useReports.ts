@@ -10,6 +10,7 @@ export interface OverviewMetrics {
   totalFeedKg: number;
   assignedFeedKg: number;
   remainingFeedKg: number;
+  outstandingOrderBalance: number;
 }
 
 export interface BatchReport {

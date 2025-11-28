@@ -19,6 +19,7 @@ export function GeneralSettings() {
       setCurrencySymbol(settings.currencySymbol || '₦');
       setLowStockThreshold(settings.lowStockThreshold || 50);
       setFcrPresets(parseFeedConversionPresets(settings.feedConversionPresets));
+      setShowAiInsights(settings.showAiInsights ?? true);
     }
   }, [settings]);
 
@@ -52,6 +53,7 @@ export function GeneralSettings() {
   const [currencySymbol, setCurrencySymbol] = useState('₦');
   const [lowStockThreshold, setLowStockThreshold] = useState(50);
   const [fcrPresets, setFcrPresets] = useState({ STARTER: 1.8, GROWER: 2.0, FINISHER: 2.2 });
+  const [showAiInsights, setShowAiInsights] = useState(true);
 
   const handleSave = () => {
     updateSettingsMutation.mutate({
@@ -60,6 +62,7 @@ export function GeneralSettings() {
       currencySymbol,
       lowStockThreshold,
       feedConversionPresets: JSON.stringify(fcrPresets),
+      showAiInsights,
     }, {
       onSuccess: (data) => {
         // Update the form state with the returned data
@@ -68,6 +71,7 @@ export function GeneralSettings() {
         setCurrencySymbol(data.currencySymbol || '₦');
         setLowStockThreshold(data.lowStockThreshold || 50);
         setFcrPresets(parseFeedConversionPresets(data.feedConversionPresets));
+        setShowAiInsights(data.showAiInsights ?? true);
         toast.success('Settings saved successfully');
       },
       onError: (error: any) => {
@@ -176,6 +180,27 @@ export function GeneralSettings() {
                 setLowStockThreshold(value);
               }}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dashboard Features</CardTitle>
+          <CardDescription>Control which features appear on the dashboard</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="showAiInsights"
+              checked={showAiInsights}
+              onChange={(e) => setShowAiInsights(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showAiInsights" className="text-sm font-medium text-gray-700 dark:text-slate-300">
+              Show AI Insights Widget
+            </label>
           </div>
         </CardContent>
       </Card>

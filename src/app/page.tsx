@@ -2,10 +2,11 @@
 
 import { useOverviewMetrics } from '@/features/reports/hooks/useReports';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useSettings } from '@/features/settings/hooks/useSettings';
 import { KPICard } from '@/components/common/KPICard';
 import Table from '@/components/ui/Table';
 import { formatCurrency } from '@/utils/currency';
-import { DollarSign, TrendingUp, TrendingDown, Users, Percent, Package } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Users, Percent, Package, CreditCard } from 'lucide-react';
 import PendingPaymentsCarousel from '@/components/PendingPaymentsCarousel';
 import AIInsightsWidget from '@/components/AIInsightsWidget';
 
@@ -31,8 +32,9 @@ const transactionColumns = [
 export default function Home() {
   const { data: metrics, isLoading: metricsLoading } = useOverviewMetrics();
   const { data: transactions, isLoading: txLoading } = useTransactions({});
+  const { data: settings } = useSettings();
 
-  const recentTransactions = (transactions?.transactions || transactions || [])?.slice(0, 5) || [];
+  const recentTransactions = (transactions?.transactions || transactions || [])?.slice(0, 10) || [];
 
   if (metricsLoading) {
     return (
@@ -49,7 +51,7 @@ export default function Home() {
           <div className="animate-pulse">
             <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
             <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
+              {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="h-8 bg-gray-200 rounded"></div>
               ))}
             </div>
@@ -68,8 +70,8 @@ export default function Home() {
       <PendingPaymentsCarousel />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <div className="lg:col-span-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+        <div className={settings?.showAiInsights !== false ? 'lg:col-span-2' : 'lg:col-span-3'}>
+          <div className={`grid gap-4 sm:gap-6 ${settings?.showAiInsights !== false ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
             <KPICard
               title="Total Income"
               value={formatCurrency(metrics?.totalIncome || 0)}
@@ -81,12 +83,6 @@ export default function Home() {
               value={formatCurrency(metrics?.totalExpenses || 0)}
               icon={DollarSign}
               color="red"
-            />
-            <KPICard
-              title="Current Balance"
-              value={formatCurrency(metrics?.overallProfit || 0)}
-              icon={DollarSign}
-              color={metrics?.overallProfit && metrics.overallProfit >= 0 ? 'green' : 'red'}
             />
             <KPICard
               title="Overall Profit"
@@ -107,6 +103,12 @@ export default function Home() {
               color="blue"
             />
             <KPICard
+              title="Outstanding Orders"
+              value={formatCurrency(metrics?.outstandingOrderBalance || 0)}
+              icon={CreditCard}
+              color="orange"
+            />
+            <KPICard
               title="Mortality Rate"
               value={`${(metrics?.mortalityRate || 0).toFixed(2)}%`}
               icon={TrendingDown}
@@ -121,7 +123,7 @@ export default function Home() {
           </div>
         </div>
         <div className="lg:col-span-1">
-          <AIInsightsWidget />
+          {settings?.showAiInsights !== false && <AIInsightsWidget />}
         </div>
       </div>
 
