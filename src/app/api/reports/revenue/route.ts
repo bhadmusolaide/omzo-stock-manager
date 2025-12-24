@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
     const supabase = createClientServiceRole();
     let query = supabase.from('orders').select('*, order_items(*)');
-  
+
     if (batchId) {
       query = query.eq('linked_batch_id', batchId);
     }
@@ -25,27 +25,92 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Group revenue by product type (from orderItems)
-    const revenueByProduct = orders.reduce(
-      (acc: Record<string, number>, order: any) => {
-        (order.order_items || []).forEach((item: any) => {
-          const productName = item.product_name;
-          if (!acc[productName]) {
-            acc[productName] = 0;
-          }
-          acc[productName] += (item.total_price || 0);
-        });
-        return acc;
-      },
-      {} as Record<string, number>
-    );
+    // Group revenue by product type (from orderItems) and by order type
+    const revenueByProduct: Record<string, number> = {};
+    const revenueByOrderType = {
+      LIVE: { revenue: 0, count: 0 },
+      DRESSED: { revenue: 0, count: 0 },
+    };
+    // Track complimentary orders separately
+    const complimentaryStats = {
+      orderCount: 0,
+      totalValue: 0, // Value of what was given away
+      liveCount: 0,
+      dressedCount: 0,
+    };
 
-    const data = Object.entries(revenueByProduct).map(([name, value]) => ({
+    orders.forEach((order: any) => {
+      const orderType = order.order_type || 'DRESSED';
+      const isComplimentary = order.payment_status === 'COMPLIMENTARY';
+
+      (order.order_items || []).forEach((item: any) => {
+        const productName = item.product_name;
+        const totalPrice = item.total_price || 0;
+        const qtyCount = item.qty_count || item.quantity || 0;
+
+        // Track complimentary orders
+        if (isComplimentary) {
+          complimentaryStats.totalValue += totalPrice;
+          if (orderType === 'LIVE') {
+            complimentaryStats.liveCount += qtyCount;
+          } else {
+            complimentaryStats.dressedCount += qtyCount;
+          }
+        } else {
+          // Only count revenue for non-complimentary orders
+          if (!revenueByProduct[productName]) {
+            revenueByProduct[productName] = 0;
+          }
+          revenueByProduct[productName] += totalPrice;
+
+          // Track by order type (revenue and count) - exclude complimentary
+          if (orderType === 'LIVE') {
+            revenueByOrderType.LIVE.revenue += totalPrice;
+            revenueByOrderType.LIVE.count += qtyCount;
+          } else {
+            revenueByOrderType.DRESSED.revenue += totalPrice;
+            revenueByOrderType.DRESSED.count += qtyCount;
+          }
+        }
+      });
+
+      // Count complimentary orders
+      if (isComplimentary) {
+        complimentaryStats.orderCount += 1;
+      }
+    });
+
+    const productData = Object.entries(revenueByProduct).map(([name, value]) => ({
       name,
       value: parseFloat((value as number).toFixed(2)),
     }));
 
-    return NextResponse.json(data);
+    // Return order type breakdown, complimentary stats, and product breakdown
+    return NextResponse.json({
+      byProduct: productData,
+      byOrderType: [
+        {
+          name: 'Live Chickens 🐔',
+          value: parseFloat(revenueByOrderType.LIVE.revenue.toFixed(2)),
+          count: revenueByOrderType.LIVE.count,
+          type: 'LIVE'
+        },
+        {
+          name: 'Dressed Products 🍗',
+          value: parseFloat(revenueByOrderType.DRESSED.revenue.toFixed(2)),
+          count: revenueByOrderType.DRESSED.count,
+          type: 'DRESSED'
+        },
+      ],
+      complimentary: {
+        orderCount: complimentaryStats.orderCount,
+        totalValue: parseFloat(complimentaryStats.totalValue.toFixed(2)),
+        liveCount: complimentaryStats.liveCount,
+        dressedCount: complimentaryStats.dressedCount,
+      },
+      // Keep backward compatibility - return productData as default array
+      data: productData,
+    });
   } catch (error) {
     console.error('Error fetching revenue:', error);
     return NextResponse.json({ error: 'Failed to fetch revenue' }, { status: 500 });

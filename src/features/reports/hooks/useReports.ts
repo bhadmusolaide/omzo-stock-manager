@@ -83,15 +83,43 @@ export function useExpenseBreakdown(batchId?: string) {
   });
 }
 
+export interface OrderTypeRevenue extends ChartData {
+  type: 'LIVE' | 'DRESSED';
+  count: number;
+}
+
+export interface ComplimentaryStats {
+  orderCount: number;
+  totalValue: number;
+  liveCount: number;
+  dressedCount: number;
+}
+
+export interface RevenueData {
+  byProduct: ChartData[];
+  byOrderType: OrderTypeRevenue[];
+  complimentary?: ComplimentaryStats;
+  data: ChartData[];
+}
+
 export function useRevenueBreakdown(batchId?: string) {
-  return useQuery<ChartData[]>({
+  return useQuery<RevenueData>({
     queryKey: ['reports', 'revenue', batchId],
     queryFn: async () => {
       const url = new URL('/api/reports/revenue', window.location.origin);
       if (batchId) url.searchParams.set('batchId', batchId);
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error('Failed to fetch revenue');
-      return res.json();
+      const data = await res.json();
+      // Handle backward compatibility - if response is an array, wrap it
+      if (Array.isArray(data)) {
+        return {
+          byProduct: data,
+          byOrderType: [],
+          data: data,
+        };
+      }
+      return data;
     },
   });
 }

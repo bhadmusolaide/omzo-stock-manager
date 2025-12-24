@@ -11,6 +11,8 @@ const createOrderSchema = z.object({
    totalAmount: z.number().min(0, 'Total amount must be non-negative'),
    amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
    linkedBatchId: z.string().optional(),
+   orderType: z.enum(['DRESSED', 'LIVE']).default('DRESSED'), // New: order type
+   paymentStatus: z.enum(['PENDING', 'PARTIAL', 'PAID', 'COMPLIMENTARY']).optional(), // Allow explicit payment status
    orderItems: z.array(z.object({
      productId: z.string().min(1, 'Product ID is required'),
      qtyCount: z.number().int().min(0),
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest) {
       balanceDue: order.balance_due,
       paymentStatus: order.payment_status,
       status: order.status,
+      orderType: order.order_type || 'DRESSED', // Include order type
       linkedBatchId: order.linked_batch_id,
       batchName: order.batches?.name || null,
       orderItems: (order.order_items || []).map((item: any) => ({
@@ -83,6 +86,8 @@ export async function GET(request: NextRequest) {
         qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
+        itemType: item.item_type || 'DRESSED', // Include item type
+        sourceBatchId: item.source_batch_id,
       })),
       createdAt: order.created_at,
       updatedAt: order.updated_at,
@@ -105,8 +110,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let body;
-  let validatedData;
+  let body: unknown;
+  let validatedData: z.infer<typeof createOrderSchema> | undefined;
   try {
     body = await request.json();
     validatedData = createOrderSchema.parse(body);
@@ -143,9 +148,11 @@ export async function POST(request: NextRequest) {
       orderNumber = `ORD-${dateStr}-${nextSequence.toString().padStart(4, '0')}`;
     }
 
-    // Calculate payment status
-    let paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID';
-    if (validatedData.amountPaid === 0) {
+    // Calculate payment status (respect explicit COMPLIMENTARY status)
+    let paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' | 'COMPLIMENTARY';
+    if (validatedData.paymentStatus === 'COMPLIMENTARY') {
+      paymentStatus = 'COMPLIMENTARY';
+    } else if (validatedData.amountPaid === 0) {
       paymentStatus = 'PENDING';
     } else if (validatedData.amountPaid < validatedData.totalAmount) {
       paymentStatus = 'PARTIAL';
@@ -158,15 +165,46 @@ export async function POST(request: NextRequest) {
     // Calculate balance due
     const balanceDue = validatedData.totalAmount - validatedData.amountPaid;
 
-    // Validate inventory before inserting order
-    if (validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '' && !validatedData.overrideValidation) {
+    // Determine order type (default to DRESSED for backwards compatibility)
+    const orderType = validatedData.orderType || 'DRESSED';
+    const isLiveOrder = orderType === 'LIVE';
+
+    // For LIVE orders, validate batch is provided and has enough birds
+    if (isLiveOrder) {
+      if (!validatedData.linkedBatchId || validatedData.linkedBatchId.trim() === '') {
+        return NextResponse.json({ error: 'Batch is required for live chicken orders' }, { status: 400 });
+      }
+
+      // Get total live birds requested
+      const totalBirdsRequested = validatedData.orderItems.reduce((sum, item) => sum + (item.qtyCount || 0), 0);
+
+      // Fetch batch to check current_live
+      const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('id, name, current_live')
+        .eq('id', validatedData.linkedBatchId)
+        .single();
+
+      if (batchError) throw batchError;
+      if (!batch) {
+        return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+      }
+
+      if (!validatedData.overrideValidation && totalBirdsRequested > (batch.current_live || 0)) {
+        return NextResponse.json({
+          error: `Insufficient live birds. Available: ${batch.current_live}, Requested: ${totalBirdsRequested}`
+        }, { status: 400 });
+      }
+    }
+
+    // Validate dressed inventory before inserting order (only for DRESSED orders)
+    if (!isLiveOrder && validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '' && !validatedData.overrideValidation) {
       for (const item of validatedData.orderItems) {
         const deductCount = (item.priceMode === 'COUNT' || item.priceMode === 'COUNT_KG') ? item.qtyCount : 0;
         const deductWeight = (item.priceMode === 'KG' || item.priceMode === 'COUNT_KG') ? item.qtyWeight : 0;
 
         if (deductCount > 0 || deductWeight > 0) {
           // Aggregate inventory for the product type and batch
-          const supabase = createClientServiceRole();
           const { data: inventoryList, error: fetchError } = await supabase
             .from('dressed_inventory')
             .select('*')
@@ -206,6 +244,7 @@ export async function POST(request: NextRequest) {
         balance_due: balanceDue,
         payment_status: paymentStatus,
         status: paymentStatus, // Populate the 'status' column as well
+        order_type: orderType, // Include order type
         linked_batch_id: validatedData.linkedBatchId || null,
       })
       .select()
@@ -232,6 +271,8 @@ export async function POST(request: NextRequest) {
         price_mode: item.priceMode,
         qty_count: item.qtyCount,
         qty_weight: item.qtyWeight,
+        item_type: isLiveOrder ? 'LIVE' : 'DRESSED', // Track item type
+        source_batch_id: isLiveOrder ? validatedData!.linkedBatchId : null, // Track source batch for live
       };
     });
 
@@ -247,7 +288,7 @@ export async function POST(request: NextRequest) {
         .from('transactions')
         .insert({
           date: new Date().toISOString(),
-          description: `Order Payment: ${(order as any).order_number} - ${order.customer_name}`,
+          description: `${isLiveOrder ? 'Live Chicken' : 'Order'} Payment: ${(order as any).order_number} - ${order.customer_name}`,
           amount: validatedData.amountPaid,
           type: 'CREDIT',
           category: 'ORDER',
@@ -258,8 +299,34 @@ export async function POST(request: NextRequest) {
       if (transactionError) throw transactionError;
     }
 
-    // Deduct from dressed inventory if linked to batch
-    if (validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '') {
+    // Handle inventory deduction based on order type
+    if (isLiveOrder && validatedData.linkedBatchId) {
+      // LIVE ORDER: Deduct from batch's current_live count
+      const totalBirdsToDeduct = validatedData.orderItems.reduce((sum, item) => sum + (item.qtyCount || 0), 0);
+
+      const { data: currentBatch, error: fetchBatchError } = await supabase
+        .from('batches')
+        .select('current_live')
+        .eq('id', validatedData.linkedBatchId)
+        .single();
+
+      if (fetchBatchError) throw fetchBatchError;
+
+      const newCurrentLive = Math.max(0, (currentBatch?.current_live || 0) - totalBirdsToDeduct);
+
+      const { error: updateBatchError } = await supabase
+        .from('batches')
+        .update({
+          current_live: newCurrentLive,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', validatedData.linkedBatchId);
+
+      if (updateBatchError) throw updateBatchError;
+
+      console.log(`Live order: Deducted ${totalBirdsToDeduct} birds from batch. New current_live: ${newCurrentLive}`);
+    } else if (!isLiveOrder && validatedData.linkedBatchId && validatedData.linkedBatchId.trim() !== '') {
+      // DRESSED ORDER: Deduct from dressed inventory
       for (const item of validatedData.orderItems) {
         const deductCount = (item.priceMode === 'COUNT' || item.priceMode === 'COUNT_KG') ? item.qtyCount : 0;
         const deductWeight = (item.priceMode === 'KG' || item.priceMode === 'COUNT_KG') ? item.qtyWeight : 0;
@@ -346,15 +413,18 @@ export async function POST(request: NextRequest) {
       balanceDue: fullOrder.balance_due,
       paymentStatus: fullOrder.payment_status,
       status: fullOrder.status,
+      orderType: fullOrder.order_type || 'DRESSED', // Include order type
       linkedBatchId: fullOrder.linked_batch_id,
       batchName: fullOrder.batches?.name || null,
       orderItems: (fullOrder.order_items || []).map((item: any) => ({
         id: item.id,
-        productId: item.product_name, // Fixed: Use product_name instead of product_id
+        productId: item.product_name,
         qtyCount: item.qty_count || 0,
         qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
+        itemType: item.item_type || 'DRESSED', // Include item type
+        sourceBatchId: item.source_batch_id,
       })),
       createdAt: fullOrder.created_at,
       updatedAt: fullOrder.updated_at,

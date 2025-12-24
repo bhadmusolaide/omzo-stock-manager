@@ -25,7 +25,9 @@ interface Order {
   totalAmount: number | null;
   amountPaid: number | null;
   paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' | null;
+  orderType?: 'DRESSED' | 'LIVE' | null; // New: order type
   linkedBatchId?: string | null;
+  batchName?: string | null;
   batches?: {
     id: string;
     name: string;
@@ -38,6 +40,7 @@ interface Order {
     unitPrice: number | null;
     priceMode: 'COUNT' | 'KG' | 'COUNT_KG' | null;
     subtotal: number | null;
+    itemType?: 'DRESSED' | 'LIVE' | null;
   }[] | null;
 }
 
@@ -154,6 +157,18 @@ export default function Orders() {
 
   const columns = [
     { key: "orderNumber", header: "Order No", minWidth: "100px", maxWidth: "120px", truncate: true, render: (value: string | null) => value || 'N/A' },
+    { key: "orderType", header: "Type", minWidth: "80px", render: (value: string | null) => {
+      const type = value || 'DRESSED';
+      return (
+        <span className={`px-2 py-1 rounded text-xs font-medium inline-flex items-center gap-1 ${
+          type === 'LIVE'
+            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400'
+        }`}>
+          {type === 'LIVE' ? '🐔' : '🍗'} {type}
+        </span>
+      );
+    } },
     { key: "batchName", header: "Batch", minWidth: "100px", render: (value: string | null) => value || 'N/A' },
     { key: "customerName", header: "Customer", minWidth: "120px", render: (value: string | null) => value || 'N/A' },
     { key: "orderDate", header: "Date", minWidth: "100px", render: (value: string | null) => {
@@ -175,11 +190,12 @@ export default function Orders() {
       const status = value || 'PENDING';
       return (
         <span className={`px-2 py-1 rounded text-xs font-medium ${
+          status === 'COMPLIMENTARY' ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-400' :
           status === 'PAID' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400' :
           status === 'PARTIAL' ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400' :
           'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-400'
         }`}>
-          {status}
+          {status === 'COMPLIMENTARY' ? '🎁 Compl.' : status}
         </span>
       );
     } },

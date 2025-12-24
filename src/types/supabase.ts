@@ -411,7 +411,7 @@ export interface Database {
     Enums: {
       batch_status: "BROODING" | "GROWING" | "PROCESSING" | "CLOSED"
       feed_type: "STARTER" | "GROWER" | "FINISHER"
-      payment_status: "PENDING" | "PARTIAL" | "PAID"
+      payment_status: "PENDING" | "PARTIAL" | "PAID" | "COMPLIMENTARY"
       transaction_category: "DOC" | "FEED" | "ORDER" | "EXPENSE" | "OTHER"
       transaction_type: "CREDIT" | "DEBIT"
     }

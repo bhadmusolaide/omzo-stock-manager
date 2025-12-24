@@ -64,6 +64,8 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const [orderData, setOrderData] = useState<any>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false); // State for showing history
+  const [orderType, setOrderType] = useState<'DRESSED' | 'LIVE'>('DRESSED'); // Track order type (read-only)
+  const [isComplimentary, setIsComplimentary] = useState(false); // Track complimentary status
   const updateOrder = useUpdateOrder();
   const { data: orderHistory, isLoading: isHistoryLoading } = useOrderHistory(orderId);
 
@@ -100,9 +102,10 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const amountPaid = watch('amountPaid') || 0;
   const installmentPayment = watch('installmentPayment') || 0;
   const totalPaid = amountPaid + installmentPayment;
-  const paymentStatus = totalPaid === 0 ? 'PENDING' :
+  const paymentStatus = isComplimentary ? 'COMPLIMENTARY' :
+                        totalPaid === 0 ? 'PENDING' :
                         totalPaid < totalAmount ? 'PARTIAL' : 'PAID';
-  const balanceDue = Math.max(0, totalAmount - totalPaid);
+  const balanceDue = isComplimentary ? 0 : Math.max(0, totalAmount - totalPaid);
 
   useEffect(() => {
     if (isOpen) {
@@ -175,6 +178,8 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
           }
           setOrderData(data);
           setIsDataLoaded(true);
+          setOrderType(data.orderType || 'DRESSED'); // Set order type from fetched data
+          setIsComplimentary(data.paymentStatus === 'COMPLIMENTARY'); // Set complimentary status
 
           // Prepare order items with proper default values
           const preparedOrderItems = (data.orderItems && data.orderItems.length > 0)
@@ -188,7 +193,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
                 priceMode: item.priceMode || 'COUNT',
               }))
             : [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }];
-          
+
           reset({
             orderNumber: data.orderNumber || '',
             customerName: data.customerName || '',
@@ -231,8 +236,13 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const onSubmit = async (data: OrderFormData) => {
     try {
       // Add installment payment to amountPaid before submitting
-      const updatedAmountPaid = data.amountPaid + data.installmentPayment;
-      const payload = { ...data, amountPaid: updatedAmountPaid, totalAmount };
+      const updatedAmountPaid = isComplimentary ? 0 : (data.amountPaid + data.installmentPayment);
+      const payload = {
+        ...data,
+        amountPaid: updatedAmountPaid,
+        totalAmount,
+        paymentStatus: isComplimentary ? 'COMPLIMENTARY' : undefined,
+      };
       // Remove installmentPayment from payload as it's not stored in the database
       const { installmentPayment, ...finalPayload } = payload;
       await updateOrder.mutateAsync({ id: orderId!, data: finalPayload });
@@ -249,6 +259,27 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Order">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/* Order Type Indicator (Read-only) */}
+        <div className={`p-3 rounded-lg border ${
+          orderType === 'LIVE'
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{orderType === 'LIVE' ? '🐔' : '🍗'}</span>
+            <span className={`font-medium ${
+              orderType === 'LIVE'
+                ? 'text-green-800 dark:text-green-300'
+                : 'text-orange-800 dark:text-orange-300'
+            }`}>
+              {orderType === 'LIVE' ? 'Live Chicken Order' : 'Dressed Product Order'}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+              (Order type cannot be changed)
+            </span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="Order Number"
@@ -397,38 +428,73 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input
-            label="Amount Paid"
-            type="number"
-            step="0.01"
-            {...register('amountPaid', { valueAsNumber: true })}
-            error={errors.amountPaid?.message}
-          />
+        {/* Complimentary Order Indicator/Toggle */}
+        {isComplimentary ? (
+          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+              🎁 This is a Complimentary Order (Gift/Free)
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+            <input
+              type="checkbox"
+              id="complimentary-edit"
+              checked={isComplimentary}
+              onChange={(e) => setIsComplimentary(e.target.checked)}
+              className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+            />
+            <label htmlFor="complimentary-edit" className="text-sm font-medium text-purple-800 dark:text-purple-200">
+              🎁 Mark as Complimentary Order
+            </label>
+          </div>
+        )}
 
-          <Input
-            label="Inst. Payment"
-            type="number"
-            step="0.01"
-            {...register('installmentPayment', { valueAsNumber: true })}
-            error={errors.installmentPayment?.message}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <Input
+              label="Amount Paid"
+              type="number"
+              step="0.01"
+              disabled={isComplimentary}
+              {...register('amountPaid', { valueAsNumber: true })}
+              error={errors.amountPaid?.message}
+            />
+            {isComplimentary && (
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">N/A for complimentary</p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Inst. Payment"
+              type="number"
+              step="0.01"
+              disabled={isComplimentary}
+              {...register('installmentPayment', { valueAsNumber: true })}
+              error={errors.installmentPayment?.message}
+            />
+            {isComplimentary && (
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">N/A for complimentary</p>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Status</label>
             <p className={`text-sm font-medium ${
+              paymentStatus === 'COMPLIMENTARY' ? 'text-purple-500 dark:text-purple-400' :
               paymentStatus === 'PAID' ? 'text-green-400 dark:text-green-300' :
               paymentStatus === 'PARTIAL' ? 'text-yellow-400 dark:text-yellow-300' :
               'text-red-400 dark:text-red-300'
             }`}>
-              {paymentStatus}
+              {paymentStatus === 'COMPLIMENTARY' ? 'Compl.' : paymentStatus}
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Balance Due</label>
-            <p className="text-sm font-medium text-red-400 dark:text-red-300">
-              {formatCurrency(balanceDue)}
+            <p className={`text-sm font-medium ${isComplimentary ? 'text-purple-400 dark:text-purple-300' : 'text-red-400 dark:text-red-300'}`}>
+              {isComplimentary ? 'N/A' : formatCurrency(balanceDue)}
             </p>
           </div>
         </div>

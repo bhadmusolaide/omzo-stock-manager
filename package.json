@@ -30,7 +30,7 @@
     "recharts": "^3.3.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "vercel": "^41.0.2",
+    "vercel": "^25.2.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

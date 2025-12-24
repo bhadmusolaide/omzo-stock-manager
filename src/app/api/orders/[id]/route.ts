@@ -10,6 +10,7 @@ const updateOrderSchema = z.object({
   totalAmount: z.number().min(0, 'Total amount must be non-negative').optional(),
   amountPaid: z.number().min(0, 'Amount paid must be non-negative').optional(),
   linkedBatchId: z.string().optional(),
+  paymentStatus: z.enum(['PENDING', 'PARTIAL', 'PAID', 'COMPLIMENTARY']).optional(), // Allow explicit payment status
   orderItems: z.array(z.object({
     id: z.string().optional(),
     productId: z.string().min(1, 'Product ID is required'),
@@ -58,6 +59,7 @@ export async function GET(
       balanceDue: Math.max(0, order.total_amount - order.amount_paid),
       paymentStatus: order.payment_status,
       status: order.status,
+      orderType: order.order_type || 'DRESSED', // Include order type
       linkedBatchId: order.linked_batch_id,
       batchName: order.batches?.name || null,
       orderItems: (order.order_items || []).map((item: any) => ({
@@ -67,6 +69,8 @@ export async function GET(
         qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
+        itemType: item.item_type || 'DRESSED', // Include item type
+        sourceBatchId: item.source_batch_id,
       })),
       createdAt: order.created_at,
       updatedAt: order.updated_at,
@@ -122,9 +126,11 @@ export async function PATCH(
       }, 0);
     }
 
-    // Calculate payment status
+    // Calculate payment status (respect explicit COMPLIMENTARY status)
     let paymentStatus = (currentOrder as any).payment_status;
-    if (validatedData.amountPaid !== undefined || newTotalAmount !== currentOrder.total_amount) {
+    if (validatedData.paymentStatus === 'COMPLIMENTARY') {
+      paymentStatus = 'COMPLIMENTARY';
+    } else if (validatedData.amountPaid !== undefined || newTotalAmount !== currentOrder.total_amount) {
       const newAmountPaid = validatedData.amountPaid ?? (currentOrder as any).amount_paid;
       if (newAmountPaid === 0) {
         paymentStatus = 'PENDING';
@@ -468,6 +474,7 @@ export async function PATCH(
       balanceDue: Math.max(0, finalOrder.total_amount - finalOrder.amount_paid),
       paymentStatus: finalOrder.payment_status,
       status: finalOrder.status,
+      orderType: finalOrder.order_type || 'DRESSED', // Include order type
       linkedBatchId: finalOrder.linked_batch_id,
       batchName: finalOrder.batches?.name || null,
       orderItems: (finalOrder.order_items || []).map((item: any) => ({
@@ -477,6 +484,8 @@ export async function PATCH(
         qtyWeight: item.qty_weight || 0,
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
+        itemType: item.item_type || 'DRESSED', // Include item type
+        sourceBatchId: item.source_batch_id,
       })),
       createdAt: finalOrder.created_at,
       updatedAt: finalOrder.updated_at,
@@ -499,6 +508,63 @@ export async function DELETE(
   try {
     const { id } = await params;
     const supabase = createClientServiceRole();
+
+    // First, fetch the order to check if it's a live order and get details for restoration
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching order for deletion:', fetchError);
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    // If this is a LIVE order, restore the birds to the batch
+    if (order.order_type === 'LIVE' && order.linked_batch_id) {
+      // Calculate total birds to restore
+      const totalBirdsToRestore = (order.order_items || []).reduce(
+        (sum: number, item: any) => sum + (item.qty_count || 0),
+        0
+      );
+
+      if (totalBirdsToRestore > 0) {
+        // Get current batch
+        const { data: batch, error: batchFetchError } = await supabase
+          .from('batches')
+          .select('current_live')
+          .eq('id', order.linked_batch_id)
+          .single();
+
+        if (batchFetchError) {
+          console.error('Error fetching batch for restoration:', batchFetchError);
+          return NextResponse.json({ error: batchFetchError.message }, { status: 500 });
+        }
+
+        // Restore birds to batch
+        const { error: batchUpdateError } = await supabase
+          .from('batches')
+          .update({
+            current_live: (batch?.current_live || 0) + totalBirdsToRestore,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', order.linked_batch_id);
+
+        if (batchUpdateError) {
+          console.error('Error restoring birds to batch:', batchUpdateError);
+          return NextResponse.json({ error: batchUpdateError.message }, { status: 500 });
+        }
+
+        console.log(`Live order deleted: Restored ${totalBirdsToRestore} birds to batch ${order.linked_batch_id}`);
+      }
+    }
+
+    // Delete the order (order_items will be cascade deleted)
     const { error } = await supabase
       .from('orders')
       .delete()

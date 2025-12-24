@@ -174,10 +174,70 @@ export default function Reports() {
           </div>
         )}
 
+        {/* Revenue by Order Type Summary */}
+        {revenueData?.byOrderType && revenueData.byOrderType.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {revenueData.byOrderType.map((item) => (
+              <div
+                key={item.type}
+                className={`p-4 rounded-lg ${
+                  item.type === 'LIVE'
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+                }`}
+              >
+                <h3 className={`text-lg font-semibold ${
+                  item.type === 'LIVE'
+                    ? 'text-green-800 dark:text-green-200'
+                    : 'text-orange-800 dark:text-orange-200'
+                }`}>
+                  {item.name}
+                </h3>
+                <p className={`text-2xl font-bold ${
+                  item.type === 'LIVE'
+                    ? 'text-green-900 dark:text-green-100'
+                    : 'text-orange-900 dark:text-orange-100'
+                }`}>
+                  {formatCurrency(item.value)}
+                </p>
+                <p className={`text-sm mt-1 ${
+                  item.type === 'LIVE'
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-orange-700 dark:text-orange-300'
+                }`}>
+                  {item.count.toLocaleString()} {item.type === 'LIVE' ? 'birds' : 'items'} sold
+                </p>
+              </div>
+            ))}
+
+            {/* Complimentary Orders Card - Always visible */}
+            {revenueData.complimentary && (
+              <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <h3 className="text-lg font-semibold text-purple-800 dark:text-purple-200">
+                  🎁 Complimentary
+                </h3>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                  {formatCurrency(revenueData.complimentary.totalValue)}
+                </p>
+                <p className="text-sm mt-1 text-purple-700 dark:text-purple-300">
+                  {revenueData.complimentary.orderCount} order{revenueData.complimentary.orderCount !== 1 ? 's' : ''}
+                  {(revenueData.complimentary.liveCount > 0 || revenueData.complimentary.dressedCount > 0) && ' • '}
+                  {revenueData.complimentary.liveCount > 0 && `${revenueData.complimentary.liveCount} birds`}
+                  {revenueData.complimentary.liveCount > 0 && revenueData.complimentary.dressedCount > 0 && ', '}
+                  {revenueData.complimentary.dressedCount > 0 && `${revenueData.complimentary.dressedCount} items`}
+                </p>
+                <p className="text-xs mt-1 text-purple-600 dark:text-purple-400 italic">
+                  Value given away (not revenue)
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           <ExpenseBreakdownChart data={expenseData || []} isLoading={expenseLoading} />
-          <RevenueBreakdownChart data={revenueData || []} isLoading={revenueLoading} />
+          <RevenueBreakdownChart data={revenueData?.byProduct || []} isLoading={revenueLoading} />
         </div>
 
         {/* Batch Summary Table */}

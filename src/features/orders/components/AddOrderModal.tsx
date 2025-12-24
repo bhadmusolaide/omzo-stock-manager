@@ -10,7 +10,8 @@ import Button from '@/components/ui/Button';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { formatCurrency } from '@/utils/currency';
 
-const orderItemSchema = z.object({
+// Schema for dressed order items (product required)
+const dressedOrderItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   qtyCount: z.number().int().min(0),
   qtyWeight: z.number().min(0),
@@ -18,20 +19,35 @@ const orderItemSchema = z.object({
   priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
 });
 
-const orderSchema = z.object({
-  orderNumber: z.string().optional(), // Removed required since it's auto-generated
+// Schema for live order items (no product selection needed)
+const liveOrderItemSchema = z.object({
+  productId: z.string().optional(), // Not used for live chicken
+  qtyCount: z.number().int().min(1, 'At least 1 bird required'),
+  qtyWeight: z.number().min(0),
+  unitPrice: z.number().positive('Unit price must be greater than 0'),
+  priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
+});
+
+// Base order schema without conditional validation
+const baseOrderSchema = z.object({
+  orderNumber: z.string().optional(),
   customerName: z.string().min(1, 'Customer name is required'),
   customerPhone: z.string().optional(),
-  location: z.string().optional(), // New location field
+  location: z.string().optional(),
   orderDate: z.string().min(1, 'Order date is required'),
   totalAmount: z.number().min(0, 'Total amount must be non-negative').optional(),
   amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
   linkedBatchId: z.string().optional(),
-  orderItems: z.array(orderItemSchema),
-  overrideValidation: z.boolean().optional(), // Added override validation field
+  orderType: z.enum(['DRESSED', 'LIVE']).default('DRESSED'),
+  orderItems: z.array(z.union([dressedOrderItemSchema, liveOrderItemSchema])),
+  overrideValidation: z.boolean().optional(),
 });
 
-type OrderFormData = z.infer<typeof orderSchema>;
+// Note: Conditional validation for LIVE orders (linkedBatchId required)
+// is handled in onSubmit to avoid complex schema refinement issues
+
+// Use input type from base schema to avoid refinement issues
+type OrderFormData = z.input<typeof baseOrderSchema>;
 
 interface AddOrderModalProps {
   isOpen: boolean;
@@ -42,6 +58,8 @@ interface AddOrderModalProps {
 interface Batch {
   id: string;
   name: string;
+  currentLive?: number;
+  status?: string;
 }
 
 interface DressedInventoryItem {
@@ -55,7 +73,9 @@ interface DressedInventoryItem {
 }
 
 export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderModalProps) {
+  const [orderType, setOrderType] = useState<'DRESSED' | 'LIVE'>('DRESSED');
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [liveBatches, setLiveBatches] = useState<Batch[]>([]);
   const [products, setProducts] = useState<DressedInventoryItem[]>([]);
   const [batchInventory, setBatchInventory] = useState<Record<string, DressedInventoryItem[]>>({});
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -68,9 +88,11 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
     reset,
     control,
     watch,
+    setValue,
   } = useForm<OrderFormData>({
-    resolver: zodResolver(orderSchema),
+    resolver: zodResolver(baseOrderSchema),
     defaultValues: {
+      orderType: 'DRESSED',
       orderItems: [{ productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }],
       amountPaid: 0,
     },
@@ -83,31 +105,48 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
 
   const orderItems = watch('orderItems');
   const linkedBatchId = watch('linkedBatchId');
+
+  // Calculate total amount based on order items
   const totalAmount = orderItems.reduce((sum, item) => {
-    const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
-                    item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
-                    item.qtyWeight * item.unitPrice;
+    const subtotal = item.priceMode === 'COUNT' ? (item.qtyCount || 0) * (item.unitPrice || 0) :
+                    item.priceMode === 'KG' ? (item.qtyWeight || 0) * (item.unitPrice || 0) :
+                    (item.qtyWeight || 0) * (item.unitPrice || 0);
     return sum + subtotal;
   }, 0);
 
+  const [isComplimentary, setIsComplimentary] = useState(false);
   const amountPaid = watch('amountPaid') || 0;
-  const paymentStatus = amountPaid === 0 ? 'PENDING' :
+  const paymentStatus = isComplimentary ? 'COMPLIMENTARY' :
+                       amountPaid === 0 ? 'PENDING' :
                        amountPaid < totalAmount ? 'PARTIAL' : 'PAID';
+
+  // Get selected batch info for live chicken display
+  const selectedBatch = orderType === 'LIVE'
+    ? liveBatches.find(b => b.id === linkedBatchId)
+    : null;
 
   useEffect(() => {
     if (isOpen) {
-      // Fetch all batches for the dropdown and filter out closed batches with zero inventory
+      // Fetch all batches for the dropdown
       fetch('/api/batches')
         .then((response) => response.json())
         .then(async (data) => {
-          const batchesArray = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
+          const batchesArray: Batch[] = Array.isArray(data.batches) ? data.batches : Array.isArray(data) ? data : [];
 
-          // Filter out closed batches with zero inventory
-          const filteredBatches = [];
+          // For DRESSED orders: Filter out closed batches with zero inventory
+          const dressedBatches: Batch[] = [];
+          // For LIVE orders: Filter batches with current_live > 0
+          const batchesWithLive: Batch[] = [];
+
           for (const batch of batchesArray) {
+            // Check for live birds availability (exclude closed batches)
+            if (batch.currentLive && batch.currentLive > 0 && batch.status !== 'CLOSED') {
+              batchesWithLive.push(batch);
+            }
+
+            // Check for dressed inventory availability
             if (batch.status !== 'CLOSED') {
-              // Include non-closed batches
-              filteredBatches.push(batch);
+              dressedBatches.push(batch);
             } else {
               // For closed batches, check if they have any inventory
               try {
@@ -121,19 +160,19 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                 );
 
                 if (hasInventory) {
-                  filteredBatches.push(batch);
+                  dressedBatches.push(batch);
                 }
               } catch (error) {
                 console.error('Error checking inventory for batch:', batch.id, error);
-                // If we can't check inventory, exclude the closed batch to be safe
               }
             }
           }
 
-          setBatches(filteredBatches);
+          setBatches(dressedBatches);
+          setLiveBatches(batchesWithLive);
         })
         .catch((error) => console.error('Error fetching batches:', error));
-      
+
       // Fetch dressed inventory products
       fetch('/api/dressed_inventory')
         .then((response) => response.json())
@@ -171,14 +210,59 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
     return batchItems.find(item => item.productType === productType) || null;
   };
 
+  // Handle order type change
+  const handleOrderTypeChange = (newType: 'DRESSED' | 'LIVE') => {
+    setOrderType(newType);
+    setValue('orderType', newType);
+    setValue('linkedBatchId', '');
+    // Reset order items with appropriate defaults
+    if (newType === 'LIVE') {
+      setValue('orderItems', [{ productId: 'Live Chicken', qtyCount: 1, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }]);
+    } else {
+      setValue('orderItems', [{ productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }]);
+    }
+  };
+
   const onSubmit = async (data: OrderFormData) => {
     setErrorMessage('');
+
+    // Validate live chicken order has batch selected
+    if (orderType === 'LIVE' && !data.linkedBatchId) {
+      setErrorMessage('Batch is required for live chicken orders');
+      return;
+    }
+
+    // Validate live chicken count doesn't exceed available
+    if (orderType === 'LIVE' && selectedBatch) {
+      const requestedCount = data.orderItems[0]?.qtyCount || 0;
+      if (requestedCount > (selectedBatch.currentLive || 0)) {
+        setErrorMessage(`Cannot sell more than ${selectedBatch.currentLive} available live birds`);
+        return;
+      }
+    }
+
     try {
       // Remove orderNumber from payload since it's auto-generated
       const { orderNumber, ...payloadData } = data;
-      const payload = { ...payloadData, totalAmount };
+
+      // For live orders, set product name to "Live Chicken"
+      const orderItems = orderType === 'LIVE'
+        ? data.orderItems.map(item => ({ ...item, productId: 'Live Chicken' }))
+        : data.orderItems;
+
+      const payload = {
+        ...payloadData,
+        orderType,
+        orderItems,
+        totalAmount,
+        // Include payment status for complimentary orders
+        paymentStatus: isComplimentary ? 'COMPLIMENTARY' : undefined,
+        amountPaid: isComplimentary ? 0 : data.amountPaid,
+      };
       await createOrder.mutateAsync(payload);
       reset();
+      setOrderType('DRESSED');
+      setIsComplimentary(false);
       onClose();
       onSuccess();
     } catch (error: any) {
@@ -194,6 +278,33 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
           {errorMessage}
         </div>
       )}
+
+      {/* Order Type Toggle */}
+      <div className="flex mb-4 border-b border-gray-200 dark:border-gray-600">
+        <button
+          type="button"
+          onClick={() => handleOrderTypeChange('DRESSED')}
+          className={`flex-1 py-3 px-4 text-center font-medium transition-colors ${
+            orderType === 'DRESSED'
+              ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          🍗 Dressed Chicken
+        </button>
+        <button
+          type="button"
+          onClick={() => handleOrderTypeChange('LIVE')}
+          className={`flex-1 py-3 px-4 text-center font-medium transition-colors ${
+            orderType === 'LIVE'
+              ? 'text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          🐔 Live Chicken
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
@@ -218,18 +329,33 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
             error={errors.orderDate?.message}
           />
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Linked Batch (Optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {orderType === 'LIVE' ? 'Select Batch (Required)' : 'Linked Batch (Optional)'}
+              {orderType === 'LIVE' && <span className="text-red-500 ml-1">*</span>}
+            </label>
             <select
               {...register('linkedBatchId')}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9]"
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-[#1e293b] text-[#f1f5f9] ${
+                orderType === 'LIVE' && !linkedBatchId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+              }`}
             >
               <option value="">Select batch</option>
-              {batches.map((batch) => (
+              {(orderType === 'LIVE' ? liveBatches : batches).map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.name}
+                  {batch.name} {orderType === 'LIVE' && batch.currentLive ? `(${batch.currentLive} birds available)` : ''}
                 </option>
               ))}
             </select>
+            {orderType === 'LIVE' && selectedBatch && (
+              <p className="text-sm text-green-500 mt-1">
+                Available: {selectedBatch.currentLive} live birds
+              </p>
+            )}
+            {orderType === 'LIVE' && liveBatches.length === 0 && (
+              <p className="text-sm text-yellow-500 mt-1">
+                No batches with live birds available
+              </p>
+            )}
           </div>
         </div>
 
@@ -247,123 +373,202 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
           </div>
         </div>
 
-        {/* Order Items */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Order Items</label>
-          {fields.map((field, index) => {
-            const selectedProductType = orderItems[index]?.productId;
-            const inventory = selectedProductType ? getInventoryForProduct(selectedProductType) : null;
-            
-            return (
-              <div key={field.id} className="border p-4 rounded mb-2">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
-                    <select
-                      {...register(`orderItems.${index}.productId`)}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
-                    >
-                      <option value="">Select product</option>
-                      {products.map((product) => (
-                        <option key={product.id} value={product.productType}>
-                          {product.productType}
-                        </option>
-                      ))}
-                    </select>
-                    {inventory && (
-                      <div className="text-xs text-gray-400 mt-1">
-                        Available: {inventory.availableCount} count, {inventory.availableWeightKg.toFixed(2)} kg
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Count</label>
-                    <input
-                      type="number"
-                      {...register(`orderItems.${index}.qtyCount`, { valueAsNumber: true })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Weight</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      {...register(`orderItems.${index}.qtyWeight`, { valueAsNumber: true })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      {...register(`orderItems.${index}.unitPrice`, { valueAsNumber: true })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Price Mode</label>
-                    <select
-                      {...register(`orderItems.${index}.priceMode`)}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
-                    >
-                      <option value="COUNT">Count</option>
-                      <option value="KG">KG</option>
-                      <option value="COUNT_KG">Count+KG</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
-                  <p className="text-sm font-semibold">
-                    {formatCurrency(
-                      orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
-                      orderItems[index]?.priceMode === 'KG' ? (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0) :
-                      (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0)
-                    )}
+        {/* Order Items - Different UI for LIVE vs DRESSED */}
+        {orderType === 'LIVE' ? (
+          /* Live Chicken Order - Simplified single item */
+          <div className="border border-green-500 dark:border-green-600 p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">🐔</span>
+              <h3 className="text-lg font-medium text-green-700 dark:text-green-400">Live Chicken Sale</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Number of Birds <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  {...register('orderItems.0.qtyCount', { valueAsNumber: true })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-slate-800"
+                />
+                {selectedBatch && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Max: {selectedBatch.currentLive} birds
                   </p>
-                </div>
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => remove(index)}
-                    className="mt-2"
-                  >
-                    Remove
-                  </Button>
                 )}
               </div>
-            );
-          })}
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => append({ productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' })}
-          >
-            Add Item
-          </Button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Price per Bird <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...register('orderItems.0.unitPrice', { valueAsNumber: true })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
+                <p className="text-lg font-bold text-green-600 dark:text-green-400 py-2">
+                  {formatCurrency((orderItems[0]?.qtyCount || 0) * (orderItems[0]?.unitPrice || 0))}
+                </p>
+              </div>
+            </div>
+            {/* Hidden fields for live chicken */}
+            <input type="hidden" {...register('orderItems.0.productId')} value="Live Chicken" />
+            <input type="hidden" {...register('orderItems.0.priceMode')} value="COUNT" />
+            <input type="hidden" {...register('orderItems.0.qtyWeight')} value="0" />
+          </div>
+        ) : (
+          /* Dressed Chicken Order - Multiple items */
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Order Items</label>
+            {fields.map((field, index) => {
+              const selectedProductType = orderItems[index]?.productId;
+              const inventory = selectedProductType ? getInventoryForProduct(selectedProductType) : null;
+
+              return (
+                <div key={field.id} className="border p-4 rounded mb-2">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
+                      <select
+                        {...register(`orderItems.${index}.productId`)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
+                      >
+                        <option value="">Select product</option>
+                        {products.map((product) => (
+                          <option key={product.id} value={product.productType}>
+                            {product.productType}
+                          </option>
+                        ))}
+                      </select>
+                      {inventory && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          Available: {inventory.availableCount} count, {inventory.availableWeightKg.toFixed(2)} kg
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Count</label>
+                      <input
+                        type="number"
+                        {...register(`orderItems.${index}.qtyCount`, { valueAsNumber: true })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Qty Weight</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...register(`orderItems.${index}.qtyWeight`, { valueAsNumber: true })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...register(`orderItems.${index}.unitPrice`, { valueAsNumber: true })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Price Mode</label>
+                      <select
+                        {...register(`orderItems.${index}.priceMode`)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-[#1e293b] text-[#f1f5f9]"
+                      >
+                        <option value="COUNT">Count</option>
+                        <option value="KG">KG</option>
+                        <option value="COUNT_KG">Count+KG</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
+                    <p className="text-sm font-semibold">
+                      {formatCurrency(
+                        orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
+                        orderItems[index]?.priceMode === 'KG' ? (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0) :
+                        (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0)
+                      )}
+                    </p>
+                  </div>
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => remove(index)}
+                      className="mt-2"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => append({ productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' })}
+            >
+              Add Item
+            </Button>
+          </div>
+        )}
+
+        {/* Complimentary Order Checkbox */}
+        <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+          <input
+            type="checkbox"
+            id="complimentary"
+            checked={isComplimentary}
+            onChange={(e) => {
+              setIsComplimentary(e.target.checked);
+              if (e.target.checked) {
+                setValue('amountPaid', 0);
+              }
+            }}
+            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+          />
+          <label htmlFor="complimentary" className="text-sm font-medium text-purple-800 dark:text-purple-200">
+            🎁 Complimentary Order (Gift/Free)
+          </label>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Amount Paid"
-            type="number"
-            step="0.01"
-            {...register('amountPaid', { valueAsNumber: true })}
-            error={errors.amountPaid?.message}
-          />
+          <div>
+            <Input
+              label="Amount Paid"
+              type="number"
+              step="0.01"
+              disabled={isComplimentary}
+              {...register('amountPaid', { valueAsNumber: true })}
+              error={errors.amountPaid?.message}
+            />
+            {isComplimentary && (
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                Disabled for complimentary orders
+              </p>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Status</label>
             <p className={`text-sm font-medium ${
+              paymentStatus === 'COMPLIMENTARY' ? 'text-purple-500 dark:text-purple-400' :
               paymentStatus === 'PAID' ? 'text-green-400 dark:text-green-300' :
               paymentStatus === 'PARTIAL' ? 'text-yellow-400 dark:text-yellow-300' :
               'text-red-400 dark:text-red-300'
             }`}>
-              {paymentStatus}
+              {paymentStatus === 'COMPLIMENTARY' ? 'Compl.' : paymentStatus}
             </p>
           </div>
         </div>
