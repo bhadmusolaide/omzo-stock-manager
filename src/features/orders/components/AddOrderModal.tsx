@@ -10,25 +10,16 @@ import Button from '@/components/ui/Button';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { formatCurrency } from '@/utils/currency';
 
-// Schema for dressed order items (product required)
-const dressedOrderItemSchema = z.object({
-  productId: z.string().min(1, 'Product is required'),
+// Order item schema - lenient for both LIVE and DRESSED (validation done in onSubmit)
+const orderItemSchema = z.object({
+  productId: z.string().optional(),
   qtyCount: z.number().int().min(0),
   qtyWeight: z.number().min(0),
-  unitPrice: z.number().positive('Unit price must be greater than 0'),
+  unitPrice: z.number().min(0),
   priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
 });
 
-// Schema for live order items (no product selection needed)
-const liveOrderItemSchema = z.object({
-  productId: z.string().optional(), // Not used for live chicken
-  qtyCount: z.number().int().min(1, 'At least 1 bird required'),
-  qtyWeight: z.number().min(0),
-  unitPrice: z.number().positive('Unit price must be greater than 0'),
-  priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
-});
-
-// Base order schema without conditional validation
+// Base order schema - conditional validation handled in onSubmit
 const baseOrderSchema = z.object({
   orderNumber: z.string().optional(),
   customerName: z.string().min(1, 'Customer name is required'),
@@ -39,7 +30,7 @@ const baseOrderSchema = z.object({
   amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
   linkedBatchId: z.string().optional(),
   orderType: z.enum(['DRESSED', 'LIVE']).default('DRESSED'),
-  orderItems: z.array(z.union([dressedOrderItemSchema, liveOrderItemSchema])),
+  orderItems: z.array(orderItemSchema),
   overrideValidation: z.boolean().optional(),
 });
 
@@ -97,6 +88,13 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
       amountPaid: 0,
     },
   });
+
+  // Debug form errors
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      console.log('Form validation errors:', errors);
+    }
+  }, [errors]);
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -226,18 +224,42 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
   const onSubmit = async (data: OrderFormData) => {
     setErrorMessage('');
 
-    // Validate live chicken order has batch selected
-    if (orderType === 'LIVE' && !data.linkedBatchId) {
-      setErrorMessage('Batch is required for live chicken orders');
-      return;
-    }
-
-    // Validate live chicken count doesn't exceed available
-    if (orderType === 'LIVE' && selectedBatch) {
+    // Validate live chicken order
+    if (orderType === 'LIVE') {
+      if (!data.linkedBatchId) {
+        setErrorMessage('Batch is required for live chicken orders');
+        return;
+      }
       const requestedCount = data.orderItems[0]?.qtyCount || 0;
-      if (requestedCount > (selectedBatch.currentLive || 0)) {
+      if (requestedCount < 1) {
+        setErrorMessage('At least 1 bird is required');
+        return;
+      }
+      // Only validate price if not complimentary
+      if (!isComplimentary) {
+        const unitPrice = data.orderItems[0]?.unitPrice || 0;
+        if (unitPrice <= 0) {
+          setErrorMessage('Price per bird must be greater than 0');
+          return;
+        }
+      }
+      if (selectedBatch && requestedCount > (selectedBatch.currentLive || 0)) {
         setErrorMessage(`Cannot sell more than ${selectedBatch.currentLive} available live birds`);
         return;
+      }
+    }
+
+    // Validate dressed order items (skip price check for complimentary)
+    if (orderType === 'DRESSED') {
+      for (const item of data.orderItems) {
+        if (!item.productId) {
+          setErrorMessage('Product is required for each order item');
+          return;
+        }
+        if (!isComplimentary && item.unitPrice <= 0) {
+          setErrorMessage('Unit price must be greater than 0');
+          return;
+        }
       }
     }
 
@@ -305,7 +327,16 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
         </button>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit, (formErrors) => {
+        console.log('Form validation failed:', formErrors);
+        // Show first error to user
+        const firstError = Object.entries(formErrors)[0];
+        if (firstError) {
+          const [field, error] = firstError;
+          const message = (error as any)?.message || (error as any)?.root?.message || `Validation failed for ${field}`;
+          setErrorMessage(message);
+        }
+      })} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="Customer Name"
@@ -417,10 +448,10 @@ export default function AddOrderModal({ isOpen, onClose, onSuccess }: AddOrderMo
                 </p>
               </div>
             </div>
-            {/* Hidden fields for live chicken */}
-            <input type="hidden" {...register('orderItems.0.productId')} value="Live Chicken" />
-            <input type="hidden" {...register('orderItems.0.priceMode')} value="COUNT" />
-            <input type="hidden" {...register('orderItems.0.qtyWeight')} value="0" />
+            {/* Hidden fields for live chicken - values set via setValue in handleOrderTypeChange */}
+            <input type="hidden" {...register('orderItems.0.productId')} />
+            <input type="hidden" {...register('orderItems.0.priceMode')} />
+            <input type="hidden" {...register('orderItems.0.qtyWeight', { valueAsNumber: true })} />
           </div>
         ) : (
           /* Dressed Chicken Order - Multiple items */

@@ -17,7 +17,7 @@ const createOrderSchema = z.object({
      productId: z.string().min(1, 'Product ID is required'),
      qtyCount: z.number().int().min(0),
      qtyWeight: z.number().min(0),
-     unitPrice: z.number().positive('Unit price must be greater than 0'),
+     unitPrice: z.number().min(0), // Allow 0 for complimentary orders
      priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
    })),
    overrideValidation: z.boolean().optional(),

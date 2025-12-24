@@ -487,7 +487,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
               paymentStatus === 'PARTIAL' ? 'text-yellow-400 dark:text-yellow-300' :
               'text-red-400 dark:text-red-300'
             }`}>
-              {paymentStatus === 'COMPLIMENTARY' ? 'Compl.' : paymentStatus}
+              {paymentStatus === 'COMPLIMENTARY' ? 'COMPL.' : paymentStatus}
             </p>
           </div>
 
