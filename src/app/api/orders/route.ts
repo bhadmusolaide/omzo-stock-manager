@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const batchId = searchParams.get('batchId');
     const search = searchParams.get('search');
+    const orderType = searchParams.get('orderType');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
@@ -57,6 +58,9 @@ export async function GET(request: NextRequest) {
     }
     if (search) {
       query = query.ilike('customer_name', `%${search}%`);
+    }
+    if (orderType) {
+      query = query.eq('order_type', orderType);
     }
 
     const { data: orders, error, count } = await query;

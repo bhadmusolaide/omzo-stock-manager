@@ -65,6 +65,7 @@ export default function Orders() {
     status: '',
     batchId: '',
     search: '',
+    orderType: '',
   });
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -81,6 +82,7 @@ export default function Orders() {
       if (filters.status) params.append('status', filters.status);
       if (filters.batchId) params.append('batchId', filters.batchId);
       if (filters.search) params.append('search', filters.search);
+      if (filters.orderType) params.append('orderType', filters.orderType);
       params.append('page', page.toString());
       params.append('limit', pagination.itemsPerPage.toString());
 
@@ -299,13 +301,25 @@ export default function Orders() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-slate-700 shadow rounded-lg p-4 mb-4 transition-colors duration-300">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input
             label="Search"
             placeholder="Search customer"
             value={filters.search}
             onChange={(e) => handleFilterChange('search', e.target.value)}
           />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Order Type</label>
+            <select
+              value={filters.orderType}
+              onChange={(e) => handleFilterChange('orderType', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-300"
+            >
+              <option value="">All Types</option>
+              <option value="LIVE">🐔 Live</option>
+              <option value="DRESSED">🍗 Dressed</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Payment Status</label>
             <select
@@ -317,6 +331,7 @@ export default function Orders() {
               <option value="PENDING">Pending</option>
               <option value="PARTIAL">Partial</option>
               <option value="PAID">Paid</option>
+              <option value="COMPLIMENTARY">🎁 Complimentary</option>
             </select>
           </div>
           <div>
