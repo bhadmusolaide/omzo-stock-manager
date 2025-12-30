@@ -13,6 +13,13 @@ export interface OverviewMetrics {
   outstandingOrderBalance: number;
 }
 
+export interface FeedBorrowMetrics {
+  lent: { kg: number; value: number };
+  borrowed: { kg: number; value: number };
+  netPosition: number;
+  netValue: number;
+}
+
 export interface BatchReport {
   id: string;
   name: string;
@@ -30,7 +37,7 @@ export interface BatchReport {
   profitMargin: number;
   fcr: number;
   feedCostPerKg: number;
-  // New processing metrics
+  // Processing metrics
   dressingPercentage: number;
   costPerDressedKg: number;
   profitPerDressedKg: number;
@@ -39,6 +46,8 @@ export interface BatchReport {
   totalDressedWeightKg: number;
   status: string;
   startDate: string;
+  // Feed borrow metrics
+  feedBorrowMetrics?: FeedBorrowMetrics;
 }
 
 export interface ChartData {

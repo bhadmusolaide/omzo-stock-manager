@@ -7,9 +7,12 @@ import FeedTypeBadge from "@/components/ui/FeedTypeBadge";
 import Loading from "@/components/ui/Loading";
 import AddFeedModal from "@/features/feed/components/AddFeedModal";
 import EditFeedModal from "@/features/feed/components/EditFeedModal";
+import FeedBorrowModal from "@/features/feed/components/FeedBorrowModal";
+import FeedBorrowsTable from "@/features/feed/components/FeedBorrowsTable";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { formatCurrency } from "@/utils/currency";
 import { useFeedPurchases, useDeleteFeedPurchase, useTotalFeedUsed, useBatchFeedStats } from "@/features/feed/hooks/useFeed";
+import { usePendingFeedBorrows } from "@/hooks/useFeedBorrows";
 import { useUiStore } from "@/store/ui";
 import { toast } from "@/store/toast";
 import { useBatches } from "@/hooks/useBatches";
@@ -54,9 +57,12 @@ export default function Feed() {
     setEditFeed,
     deleteFeedOpen,
     deleteFeedId,
-    setDeleteFeed
+    setDeleteFeed,
+    addFeedBorrowOpen,
+    setAddFeedBorrowOpen
   } = useUiStore();
 
+  const [activeTab, setActiveTab] = useState<'purchases' | 'borrows'>('purchases');
   const [filters, setFilters] = useState({
     batchId: '',
   });
@@ -89,6 +95,8 @@ export default function Feed() {
   const totalUsed = totalFeedUsedData?.totalUsed || 0;
   const { data: batchFeedStatsData } = useBatchFeedStats(filters.batchId);
   const batchRemaining = batchFeedStatsData?.remaining || 0;
+  const { data: pendingBorrowsData, refetch: refetchBorrows } = usePendingFeedBorrows();
+  const pendingBorrows = pendingBorrowsData?.feedBorrows || [];
 
   const columns = [
     {
@@ -220,10 +228,20 @@ export default function Feed() {
        <div className="mb-8">
          <div className="flex justify-between items-start mb-2">
            <div>
-             <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Feed Purchases</h1>
-             <p className="text-gray-600 dark:text-slate-400 mt-1">Track and manage all feed purchases and consumption</p>
+             <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Feed Management</h1>
+             <p className="text-gray-600 dark:text-slate-400 mt-1">Track and manage all feed purchases, consumption and borrowing between batches</p>
            </div>
            <div className="flex gap-3">
+             <Button
+               variant="outline"
+               onClick={() => setAddFeedBorrowOpen(true)}
+               className="flex items-center gap-2"
+             >
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+               </svg>
+               Borrow Feed
+             </Button>
              <Button onClick={() => setAddFeedOpen(true)} className="flex items-center gap-2">
                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -232,6 +250,26 @@ export default function Feed() {
              </Button>
            </div>
          </div>
+
+         {/* Pending Borrows Alert */}
+         {pendingBorrows.length > 0 && (
+           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+             <div className="flex items-center gap-2">
+               <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+               </svg>
+               <span className="text-yellow-800 dark:text-yellow-200 font-medium">
+                 {pendingBorrows.length} pending feed borrow{pendingBorrows.length > 1 ? 's' : ''} awaiting settlement
+               </span>
+               <button
+                 onClick={() => setActiveTab('borrows')}
+                 className="ml-auto text-yellow-700 dark:text-yellow-300 underline hover:no-underline text-sm"
+               >
+                 View Borrows
+               </button>
+             </div>
+           </div>
+         )}
 
          {/* Filters */}
          <div className="bg-white dark:bg-slate-700 shadow rounded-lg p-4 mb-4 transition-colors duration-300">
@@ -280,25 +318,70 @@ export default function Feed() {
            </div>
          )}
        </div>
-      <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Feed Purchases</h2>
-          <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Track all feed purchases and consumption</p>
-        </div>
-        <div className="p-6">
-          <Table
-            columns={columns}
-            data={feedPurchases || []}
-            pagination={{
-              currentPage: pagination.currentPage,
-              totalPages: pagination.totalPages,
-              totalItems: pagination.totalItems,
-              itemsPerPage: pagination.itemsPerPage,
-              onPageChange: handlePageChange,
-            }}
-          />
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200 dark:border-slate-600">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('purchases')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'purchases'
+                  ? 'border-green-500 text-green-600 dark:text-green-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              Feed Purchases
+            </button>
+            <button
+              onClick={() => setActiveTab('borrows')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
+                activeTab === 'borrows'
+                  ? 'border-green-500 text-green-600 dark:text-green-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              Feed Borrows
+              {pendingBorrows.length > 0 && (
+                <span className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-400 text-xs font-medium px-2 py-0.5 rounded-full">
+                  {pendingBorrows.length}
+                </span>
+              )}
+            </button>
+          </nav>
         </div>
       </div>
+
+      {/* Content based on active tab */}
+      {activeTab === 'purchases' ? (
+        <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Feed Purchases</h2>
+            <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Track all feed purchases and consumption</p>
+          </div>
+          <div className="p-6">
+            <Table
+              columns={columns}
+              data={feedPurchases || []}
+              pagination={{
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                totalItems: pagination.totalItems,
+                itemsPerPage: pagination.itemsPerPage,
+                onPageChange: handlePageChange,
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Feed Borrows</h2>
+            <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Track feed borrowed between batches</p>
+          </div>
+          <FeedBorrowsTable showAllBatches />
+        </div>
+      )}
+
       <AddFeedModal
         isOpen={addFeedOpen}
         onClose={() => setAddFeedOpen(false)}
@@ -309,6 +392,14 @@ export default function Feed() {
         onClose={() => setEditFeed(false, null)}
         onSuccess={handleEditSuccess}
         feedId={editFeedId}
+      />
+      <FeedBorrowModal
+        isOpen={addFeedBorrowOpen}
+        onClose={() => setAddFeedBorrowOpen(false)}
+        onSuccess={() => {
+          refetchBorrows();
+          setAddFeedBorrowOpen(false);
+        }}
       />
       <ConfirmModal
         isOpen={deleteFeedOpen}

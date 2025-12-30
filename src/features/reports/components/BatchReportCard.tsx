@@ -45,6 +45,45 @@ export function BatchReportCard({ report }: BatchReportCardProps) {
         </div>
       </div>
 
+      {/* Feed Borrow Section */}
+      {report.feedBorrowMetrics && (report.feedBorrowMetrics.lent.kg > 0 || report.feedBorrowMetrics.borrowed.kg > 0) && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-yellow-50 dark:bg-yellow-900/20 border-t border-yellow-200 dark:border-yellow-800">
+          <div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Feed Lent</p>
+            <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+              {report.feedBorrowMetrics.lent.kg.toFixed(1)} kg
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatCurrency(report.feedBorrowMetrics.lent.value)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Feed Borrowed</p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {report.feedBorrowMetrics.borrowed.kg.toFixed(1)} kg
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatCurrency(report.feedBorrowMetrics.borrowed.value)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Net Position</p>
+            <p className={`text-lg font-bold ${report.feedBorrowMetrics.netPosition >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+              {report.feedBorrowMetrics.netPosition >= 0 ? '+' : ''}{report.feedBorrowMetrics.netPosition.toFixed(1)} kg
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {report.feedBorrowMetrics.netPosition >= 0 ? 'Net Borrower' : 'Net Lender'}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Net Value</p>
+            <p className={`text-lg font-bold ${report.feedBorrowMetrics.netValue >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+              {formatCurrency(Math.abs(report.feedBorrowMetrics.netValue))}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600">
         <div>
           <p className="text-sm text-gray-600 dark:text-slate-400">Revenue</p>

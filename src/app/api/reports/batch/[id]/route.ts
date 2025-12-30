@@ -20,7 +20,9 @@ export async function GET(
         orders (*, order_items(*)),
         transactions (*),
         processing_outputs (*),
-        processing_events (*)
+        processing_events (*),
+        feed_borrows_lent:feed_borrows!source_batch_id (*),
+        feed_borrows_received:feed_borrows!target_batch_id (*)
       `)
       .eq('id', id)
       .single();
@@ -110,6 +112,23 @@ export async function GET(
     const profitPerDressedKg = totalDressedWeightKg > 0 ? profit / totalDressedWeightKg : 0;
     const weightLossPercentage = finalLiveWeight > 0 ? ((finalLiveWeight - totalDressedWeightKg) / finalLiveWeight) * 100 : 0;
 
+    // Calculate feed borrow metrics
+    const feedLent = (batch.feed_borrows_lent || [])
+      .filter((b: any) => !b.is_deleted && b.status === 'PENDING')
+      .reduce((sum: number, b: any) => sum + parseFloat(b.kg_borrowed || 0), 0);
+
+    const feedBorrowed = (batch.feed_borrows_received || [])
+      .filter((b: any) => !b.is_deleted && b.status === 'PENDING')
+      .reduce((sum: number, b: any) => sum + parseFloat(b.kg_borrowed || 0), 0);
+
+    const feedLentValue = (batch.feed_borrows_lent || [])
+      .filter((b: any) => !b.is_deleted && b.status === 'PENDING')
+      .reduce((sum: number, b: any) => sum + parseFloat(b.cost_value || 0), 0);
+
+    const feedBorrowedValue = (batch.feed_borrows_received || [])
+      .filter((b: any) => !b.is_deleted && b.status === 'PENDING')
+      .reduce((sum: number, b: any) => sum + parseFloat(b.cost_value || 0), 0);
+
     const batchReport = {
       id: batch.id,
       name: batch.name,
@@ -134,7 +153,14 @@ export async function GET(
       totalProcessedBirds,
       totalDressedWeightKg,
       status: batch.status,
-      startDate: batch.start_date
+      startDate: batch.start_date,
+      // Feed borrow metrics
+      feedBorrowMetrics: {
+        lent: { kg: feedLent, value: feedLentValue },
+        borrowed: { kg: feedBorrowed, value: feedBorrowedValue },
+        netPosition: feedBorrowed - feedLent,
+        netValue: feedBorrowedValue - feedLentValue,
+      }
     };
 
     return NextResponse.json(batchReport);

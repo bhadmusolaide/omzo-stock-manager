@@ -15,6 +15,9 @@ interface UiState {
   deleteFeedOpen: boolean;
   deleteFeedId: string | null;
 
+  // Feed Borrows
+  addFeedBorrowOpen: boolean;
+
   // Orders
   addOrderOpen: boolean;
   editOrderOpen: boolean;
@@ -35,6 +38,8 @@ interface UiState {
   setAddFeedOpen: (open: boolean) => void;
   setEditFeed: (open: boolean, id?: string | null) => void;
   setDeleteFeed: (open: boolean, id?: string | null) => void;
+
+  setAddFeedBorrowOpen: (open: boolean) => void;
 
   setAddOrderOpen: (open: boolean) => void;
   setEditOrder: (open: boolean, id?: string | null) => void;
@@ -64,6 +69,10 @@ export const useUiStore = create<UiState>((set) => ({
   setAddFeedOpen: (open) => set({ addFeedOpen: open }),
   setEditFeed: (open, id = null) => set({ editFeedOpen: open, editFeedId: id ?? null }),
   setDeleteFeed: (open, id = null) => set({ deleteFeedOpen: open, deleteFeedId: id ?? null }),
+
+  // Feed Borrows
+  addFeedBorrowOpen: false,
+  setAddFeedBorrowOpen: (open) => set({ addFeedBorrowOpen: open }),
 
   // Orders
   addOrderOpen: false,

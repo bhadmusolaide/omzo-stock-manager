@@ -97,6 +97,65 @@ export interface Database {
           created_at?: string
         }
       }
+      feed_borrows: {
+        Row: {
+          id: string
+          source_batch_id: string
+          target_batch_id: string
+          feed_purchase_id: string | null
+          feed_type: Database["public"]["Enums"]["feed_type"]
+          kg_borrowed: number
+          cost_value: number
+          borrow_date: string
+          status: Database["public"]["Enums"]["feed_borrow_status"]
+          settled_date: string | null
+          settled_method: Database["public"]["Enums"]["feed_borrow_settlement_method"] | null
+          notes: string | null
+          created_by: string | null
+          updated_by: string | null
+          is_deleted: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          source_batch_id: string
+          target_batch_id: string
+          feed_purchase_id?: string | null
+          feed_type: Database["public"]["Enums"]["feed_type"]
+          kg_borrowed: number
+          cost_value?: number
+          borrow_date?: string
+          status?: Database["public"]["Enums"]["feed_borrow_status"]
+          settled_date?: string | null
+          settled_method?: Database["public"]["Enums"]["feed_borrow_settlement_method"] | null
+          notes?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          is_deleted?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          source_batch_id?: string
+          target_batch_id?: string
+          feed_purchase_id?: string | null
+          feed_type?: Database["public"]["Enums"]["feed_type"]
+          kg_borrowed?: number
+          cost_value?: number
+          borrow_date?: string
+          status?: Database["public"]["Enums"]["feed_borrow_status"]
+          settled_date?: string | null
+          settled_method?: Database["public"]["Enums"]["feed_borrow_settlement_method"] | null
+          notes?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          is_deleted?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       feed_purchases: {
         Row: {
           id: string
@@ -410,6 +469,8 @@ export interface Database {
     }
     Enums: {
       batch_status: "BROODING" | "GROWING" | "PROCESSING" | "CLOSED"
+      feed_borrow_status: "PENDING" | "SETTLED" | "CANCELLED"
+      feed_borrow_settlement_method: "RETURNED" | "PURCHASED" | "WRITTEN_OFF"
       feed_type: "STARTER" | "GROWER" | "FINISHER"
       payment_status: "PENDING" | "PARTIAL" | "PAID" | "COMPLIMENTARY"
       transaction_category: "DOC" | "FEED" | "ORDER" | "EXPENSE" | "OTHER"

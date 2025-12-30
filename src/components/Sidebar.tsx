@@ -62,7 +62,7 @@ const Sidebar = () => {
                   </div>
                   <div>
                     <h1 className="text-lg font-bold text-gray-900 dark:text-white">Omzo Farmz</h1>
-                    <p className="text-xs text-gray-600 dark:text-slate-400">Stock Manager</p>
+                    <p className="text-xs text-gray-600 dark:text-slate-400">Order and Stock Manager</p>
                   </div>
                 </Link>
               </motion.div>
@@ -123,7 +123,7 @@ const Sidebar = () => {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              © 2024 Omzo Farmz
+              © 2025 Omzo Farmz
             </motion.p>
           )}
         </AnimatePresence>

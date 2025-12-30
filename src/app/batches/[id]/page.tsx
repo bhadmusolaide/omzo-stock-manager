@@ -15,7 +15,7 @@ import FeedUsageModal from '@/components/FeedUsageModal';
 import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
 import { calculateEffectiveUnitCost } from '@/utils/calculations';
-import { getTotalFeedPurchased, getTotalFeedUsed, getRemainingFeed } from '@/lib/services/feedService';
+import { getFeedBorrowStats } from '@/lib/services/feedService';
 import logger from '@/lib/logger';
 
 interface Weighing {
@@ -79,6 +79,9 @@ export default function BatchDetail() {
     totalPurchased: 0,
     totalUsed: 0,
     remaining: 0,
+    lent: { kg: 0, value: 0, count: 0 },
+    borrowed: { kg: 0, value: 0, count: 0 },
+    netPosition: 0,
   });
   const [newWeighing, setNewWeighing] = useState({
     takenAt: '',
@@ -140,17 +143,24 @@ export default function BatchDetail() {
     if (!batchId) return;
 
     try {
-      // Fetch feed statistics
-      const [purchased, used, remaining] = await Promise.all([
+      // Fetch feed statistics including borrow stats
+      const [purchased, used, remaining, borrowStats] = await Promise.all([
         getTotalFeedPurchased(batchId),
         getTotalFeedUsed(batchId),
         getRemainingFeed(batchId),
+        getFeedBorrowStats(batchId),
       ]);
+
+      // Calculate net remaining: base remaining - lent out + borrowed in
+      const netRemaining = remaining - borrowStats.lent.kg + borrowStats.borrowed.kg;
 
       setFeedStats({
         totalPurchased: purchased,
         totalUsed: used,
-        remaining: remaining,
+        remaining: netRemaining,
+        lent: borrowStats.lent,
+        borrowed: borrowStats.borrowed,
+        netPosition: borrowStats.netPosition,
       });
 
       // Fetch feed usage records
@@ -166,6 +176,9 @@ export default function BatchDetail() {
         totalPurchased: 0,
         totalUsed: 0,
         remaining: 0,
+        lent: { kg: 0, value: 0, count: 0 },
+        borrowed: { kg: 0, value: 0, count: 0 },
+        netPosition: 0,
       });
       setFeedUsages([]);
     }
@@ -431,8 +444,40 @@ export default function BatchDetail() {
                   <span>Total Used:</span>
                   <span className="font-semibold">{feedStats.totalUsed.toFixed(2)} kg</span>
                 </div>
+
+                {/* Borrow section */}
+                {(feedStats.lent.kg > 0 || feedStats.borrowed.kg > 0) && (
+                  <>
+                    <div className="border-t pt-2 mt-2">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Inter-Batch Borrowing</span>
+                    </div>
+                    {feedStats.lent.kg > 0 && (
+                      <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                          Lent Out ({feedStats.lent.count}):
+                        </span>
+                        <span className="font-semibold">-{feedStats.lent.kg.toFixed(2)} kg</span>
+                      </div>
+                    )}
+                    {feedStats.borrowed.kg > 0 && (
+                      <div className="flex justify-between text-blue-600 dark:text-blue-400">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                          </svg>
+                          Borrowed In ({feedStats.borrowed.count}):
+                        </span>
+                        <span className="font-semibold">+{feedStats.borrowed.kg.toFixed(2)} kg</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <div className="flex justify-between border-t pt-2">
-                  <span>Remaining:</span>
+                  <span>Available (Net):</span>
                   <span className={`font-semibold ${feedStats.remaining < 10 ? 'text-red-600' : 'text-green-600'}`}>
                     {feedStats.remaining.toFixed(2)} kg
                   </span>
