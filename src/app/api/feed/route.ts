@@ -5,7 +5,7 @@ import { z } from 'zod';
 const createFeedPurchaseSchema = z.object({
   batchId: z.string().min(1, 'Batch ID is required'),
   feedType: z.enum(['STARTER', 'GROWER', 'FINISHER']),
-  brand: z.enum(['Ultima +', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
+  brand: z.enum(['Ultima +', 'Peak Feeds', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
   kg: z.number().positive('KG must be greater than 0'),
   bagCost: z.number().positive('Bag cost must be greater than 0'),
   supplier: z.string().optional(),

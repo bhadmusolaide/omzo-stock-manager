@@ -13,7 +13,7 @@ import { useCreateFeedPurchase } from '@/hooks/useFeed';
 const feedPurchaseSchema = z.object({
   batchId: z.string().min(1, 'Batch is required'),
   feedType: z.enum(['STARTER', 'GROWER', 'FINISHER']),
-  brand: z.enum(['Ultima +', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
+  brand: z.enum(['Ultima +', 'Peak Feeds', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
   kg: z.number().positive('KG must be greater than 0'),
   bagCost: z.number().positive('Bag cost must be greater than 0'),
   supplier: z.string().optional(),
@@ -123,6 +123,7 @@ export default function AddFeedModal({ isOpen, onClose, onSuccess }: AddFeedModa
             >
               <option value="">Select brand (optional)</option>
               <option value="Ultima +">Ultima +</option>
+              <option value="Peak Feeds">Peak Feeds</option>
               <option value="BreedWell">BreedWell</option>
               <option value="New Hope">New Hope</option>
               <option value="Happy Chicken">Happy Chicken</option>

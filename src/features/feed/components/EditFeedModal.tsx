@@ -14,7 +14,7 @@ import { useUpdateFeedPurchase } from '@/hooks/useFeed';
 const feedPurchaseSchema = z.object({
   batchId: z.string().min(1, 'Batch is required'),
   feedType: z.enum(['STARTER', 'GROWER', 'FINISHER']),
-  brand: z.enum(['Ultima +', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
+  brand: z.enum(['Ultima +', 'Peak Feeds', 'BreedWell', 'New Hope', 'Happy Chicken', 'Chikum', 'TopFeeds']).optional(),
   kg: z.number().positive('KG must be greater than 0'),
   bagCost: z.number().positive('Bag cost must be greater than 0'),
   supplier: z.string().optional(),
@@ -113,7 +113,7 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
           const safeBagCost = Number(data.unit_cost ?? 0);
           const safeFeedType = data.feed_type || 'STARTER';
           const safeBatchId = data.batch_id || '';
-          const safeBrand = data.brand as 'Ultima +' | 'BreedWell' | 'New Hope' | 'Happy Chicken' | 'Chikum' | 'TopFeeds' | undefined;
+          const safeBrand = data.brand as 'Ultima +' | 'Peak Feeds' | 'BreedWell' | 'New Hope' | 'Happy Chicken' | 'Chikum' | 'TopFeeds' | undefined;
       
           console.log('Safe values - batchId:', safeBatchId, 'feedType:', safeFeedType, 'kg:', safeKg, 'bagCost:', safeBagCost, 'brand:', safeBrand);
       
@@ -202,6 +202,7 @@ export default function EditFeedModal({ isOpen, onClose, onSuccess, feedId }: Ed
             >
               <option value="">Select brand (optional)</option>
               <option value="Ultima +">Ultima +</option>
+              <option value="Peak Feeds">Peak Feeds</option>
               <option value="BreedWell">BreedWell</option>
               <option value="New Hope">New Hope</option>
               <option value="Happy Chicken">Happy Chicken</option>
