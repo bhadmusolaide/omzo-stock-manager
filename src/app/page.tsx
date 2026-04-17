@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useOverviewMetrics } from '@/features/reports/hooks/useReports';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useSettings } from '@/features/settings/hooks/useSettings';
@@ -30,7 +31,8 @@ const transactionColumns = [
 ];
 
 export default function Home() {
-  const { data: metrics, isLoading: metricsLoading } = useOverviewMetrics();
+  const [activeOnly, setActiveOnly] = useState(false);
+  const { data: metrics, isLoading: metricsLoading } = useOverviewMetrics(activeOnly);
   const { data: transactions, isLoading: txLoading } = useTransactions({});
   const { data: settings } = useSettings();
 
@@ -39,7 +41,13 @@ export default function Home() {
   if (metricsLoading) {
     return (
       <div className="p-4 sm:p-6">
-        <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <div className="flex items-center space-x-2 animate-pulse">
+            <div className="h-4 w-32 bg-gray-200 rounded"></div>
+            <div className="h-6 w-11 bg-gray-200 rounded-full"></div>
+          </div>
+        </div>
         <p className="mb-6">Welcome to the Farm Stock Management System.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -63,7 +71,24 @@ export default function Home() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6">
-      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active Batches Only</span>
+          <button
+            onClick={() => setActiveOnly(!activeOnly)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              activeOnly ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                activeOnly ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
       <p className="mb-6">Welcome to the Farm Stock Management System.</p>
 
       {/* Pending Payments Carousel */}

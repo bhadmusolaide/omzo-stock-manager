@@ -56,11 +56,11 @@ export interface ChartData {
   [key: string]: string | number;
 }
 
-export function useOverviewMetrics() {
+export function useOverviewMetrics(activeOnly: boolean = false) {
   return useQuery<OverviewMetrics>({
-    queryKey: ['reports', 'overview'],
+    queryKey: ['reports', 'overview', activeOnly],
     queryFn: async () => {
-      const res = await fetch('/api/reports/overview');
+      const res = await fetch(`/api/reports/overview?activeOnly=${activeOnly}`);
       if (!res.ok) throw new Error('Failed to fetch overview');
       return res.json();
     },

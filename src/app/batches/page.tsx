@@ -71,7 +71,6 @@ export default function Batches() {
     { key: "totalMortality", header: "Mortality", minWidth: "80px" },
     { key: "effectiveUnitCost", header: "Unit Cost", minWidth: "100px", render: (value: number) => formatCurrency(value) },
     { key: "status", header: "Status", minWidth: "100px", render: (value: string) => <BatchStatusBadge status={value as Batch['status']} /> },
-    { key: "insights", header: "Insights", minWidth: "120px", render: (_: unknown, row: Batch) => <InsightBadges batchId={row.id} /> },
     {
       key: "actions",
       header: "Actions",
@@ -98,6 +97,7 @@ export default function Batches() {
         </div>
       )
     },
+    { key: "insights", header: "Insights", minWidth: "120px", render: (_: unknown, row: Batch) => <InsightBadges batchId={row.id} /> },
   ];
 
   const { data: batchesData, isLoading, error, refetch } = useBatches();
