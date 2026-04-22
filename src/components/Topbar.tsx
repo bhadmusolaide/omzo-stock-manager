@@ -7,6 +7,7 @@ import { useOverviewMetrics } from '@/features/reports/hooks/useReports';
 import { formatCurrency } from '@/utils/currency';
 import { useState, useRef, useEffect } from 'react';
 import { usePendingPayments } from '@/hooks/usePendingPayments';
+import { useTransactions } from '@/hooks/useTransactions';
 
 // Format date helper function (replaces date-fns format function)
 const formatDate = (dateString: string) => {
@@ -21,6 +22,7 @@ const Topbar = () => {
   const notificationsRef = useRef<HTMLDivElement>(null);
   const { data: metrics, isLoading } = useOverviewMetrics();
   const { data: pendingPayments = [] } = usePendingPayments();
+  const { data: transactionsData, isLoading: txLoading } = useTransactions({ limit: 1000 });
 
   // Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -42,6 +44,12 @@ const Topbar = () => {
   const pendingPaymentItems = pendingPayments.filter(payment => 
     payment.paymentStatus === 'PENDING' || payment.paymentStatus === 'PARTIAL'
   );
+
+  // Calculate balance from transactions (CREDIT - DEBIT)
+  const transactions = transactionsData?.transactions || [];
+  const totalCredit = transactions?.filter((t: any) => t.type === 'CREDIT').reduce((sum: number, t: any) => sum + t.amount, 0) || 0;
+  const totalDebit = transactions?.filter((t: any) => t.type === 'DEBIT').reduce((sum: number, t: any) => sum + t.amount, 0) || 0;
+  const transactionBalance = totalCredit - totalDebit;
 
   return (
     <header className="border-b border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center shadow-sm">
@@ -81,11 +89,11 @@ const Topbar = () => {
           <Wallet size={18} />
           <div className="flex flex-col">
             <span className="text-xs opacity-90">Balance</span>
-            {isLoading ? (
+            {isLoading || txLoading ? (
               <div className="h-4 w-16 bg-white/30 rounded animate-pulse"></div>
             ) : (
               <span className="font-bold text-sm">
-                {formatCurrency(metrics?.overallProfit || 0)}
+                {formatCurrency(transactionBalance)}
               </span>
             )}
           </div>
