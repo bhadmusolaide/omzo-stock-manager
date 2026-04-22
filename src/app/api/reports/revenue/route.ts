@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     }
 
     const supabase = createClientServiceRole();
-    let query = supabase.from('orders').select('*, order_items(*)');
+    let query = supabase.from('orders').select('*, order_items(*)').eq('is_deleted', false);
 
     if (batchId) {
       query = query.eq('linked_batch_id', batchId);

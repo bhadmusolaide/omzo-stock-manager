@@ -1,8 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/apiClient';
 
-const fetchBatches = async () => {
-  return apiClient.get('/api/batches');
+const fetchBatches = async (page?: number, limit?: number) => {
+  const params = new URLSearchParams();
+  if (page) {
+    params.append('page', page.toString());
+  }
+  if (limit) {
+    params.append('limit', limit.toString());
+  }
+  return apiClient.get(`/api/batches?${params.toString()}`);
 };
 
 const createBatch = async (data: Record<string, unknown>) => {
@@ -43,10 +50,10 @@ const hardDeleteBatch = async (id: string) => {
   return response.json();
 };
 
-export const useBatches = () => {
+export const useBatches = (page?: number, limit?: number) => {
   return useQuery({
-    queryKey: ['batches'],
-    queryFn: fetchBatches,
+    queryKey: ['batches', page, limit],
+    queryFn: () => fetchBatches(page, limit),
     retry: (failureCount, error) => {
       // Don't retry on 4xx errors (client errors)
       if (error instanceof Error && 'status' in error && typeof error.status === 'number') {

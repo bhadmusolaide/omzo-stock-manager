@@ -12,8 +12,8 @@ export async function GET(request: Request) {
     }
 
     const supabase = createClientServiceRole();
-    let queryBuilder = supabase.from('transactions').select('*, batches(*)').eq('type', 'DEBIT');
-  
+    let queryBuilder = supabase.from('transactions').select('*, batches(*)').eq('type', 'DEBIT').eq('is_deleted', false);
+
     if (batchId) {
       queryBuilder = queryBuilder.eq('linked_batch_id', batchId);
     }

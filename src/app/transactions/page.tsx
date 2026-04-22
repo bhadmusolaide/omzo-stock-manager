@@ -39,6 +39,8 @@ export default function Transactions() {
     startDate: '',
     endDate: '',
     search: '',
+    page: 1,
+    limit: 10,
   });
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -63,7 +65,8 @@ export default function Transactions() {
   }, [transactionsData, transactions.length]);
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value, page:1 }));
+    setPagination(prev => ({ ...prev, currentPage:1 }));
   };
 
   const handleAddSuccess = () => {
@@ -71,8 +74,8 @@ export default function Transactions() {
   };
 
   const handlePageChange = (page: number) => {
-    // For now, we'll just refetch - in a real implementation you'd pass page to the hook
-    // Since the hook doesn't support pagination yet, we'll just refetch
+    setFilters(prev => ({ ...prev, page }));
+    setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
 

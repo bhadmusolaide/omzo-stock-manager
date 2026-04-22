@@ -47,6 +47,8 @@ export default function Batches() {
     totalPages: 1,
     totalItems: 0,
     itemsPerPage: 10,
+    page: 1,
+    limit: 10,
   });
 
   const columns = [
@@ -100,7 +102,7 @@ export default function Batches() {
     { key: "insights", header: "Insights", minWidth: "120px", render: (_: unknown, row: Batch) => <InsightBadges batchId={row.id} /> },
   ];
 
-  const { data: batchesData, isLoading, error, refetch } = useBatches();
+  const { data: batchesData, isLoading, error, refetch } = useBatches(pagination.page, pagination.limit);
   const batches = batchesData?.batches || batchesData || [];
 
   // Fetch processing events to calculate total processed birds
@@ -167,9 +169,7 @@ export default function Batches() {
   };
 
   const handlePageChange = (page: number) => {
-    // For now, we'll refetch with new page - in a real implementation you'd pass page to the hook
-    // Since the hook doesn't support pagination yet, we'll just refetch
-    refetch();
+    setPagination(prev => ({ ...prev, page, currentPage: page }));
   };
 
   const handleDeleteCancel = () => {

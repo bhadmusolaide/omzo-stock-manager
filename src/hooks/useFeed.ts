@@ -1,10 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/apiClient';
 
-const fetchFeedPurchases = async (batchId?: string) => {
+const fetchFeedPurchases = async (batchId?: string, page?: number, limit?: number) => {
   const params = new URLSearchParams();
   if (batchId) {
     params.append('batchId', batchId);
+  }
+  if (page) {
+    params.append('page', page.toString());
+  }
+  if (limit) {
+    params.append('limit', limit.toString());
   }
   return apiClient.get(`/api/feed?${params.toString()}`);
 };
@@ -29,10 +35,10 @@ const fetchBatchFeedStats = async (batchId: string) => {
   return apiClient.get(`/api/batches/${batchId}/feed-stats`);
 };
 
-export const useFeedPurchases = (batchId?: string) => {
+export const useFeedPurchases = (batchId?: string, page?: number, limit?: number) => {
   return useQuery({
-    queryKey: ['feedPurchases', batchId],
-    queryFn: () => fetchFeedPurchases(batchId),
+    queryKey: ['feedPurchases', batchId, page, limit],
+    queryFn: () => fetchFeedPurchases(batchId, page, limit),
     retry: (failureCount, error) => {
       // Don't retry on 4xx errors (client errors)
       if (error instanceof Error && 'status' in error && typeof error.status === 'number') {

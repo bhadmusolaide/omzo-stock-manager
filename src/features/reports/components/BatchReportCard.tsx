@@ -32,8 +32,12 @@ export function BatchReportCard({ report }: BatchReportCardProps) {
           <p className="text-xl font-bold text-red-600 dark:text-red-400">{report.mortalityPercent}%</p>
         </div>
         <div>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Feed Used</p>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Feed Purchased</p>
           <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{report.totalFeedKg} kg</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Feed Consumed</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{report.feedConsumedKg} kg</p>
         </div>
         <div>
           <p className="text-sm text-gray-600 dark:text-slate-400">FCR</p>

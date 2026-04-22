@@ -65,6 +65,8 @@ export default function Feed() {
   const [activeTab, setActiveTab] = useState<'purchases' | 'borrows'>('purchases');
   const [filters, setFilters] = useState({
     batchId: '',
+    page: 1,
+    limit: 10,
   });
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -73,7 +75,7 @@ export default function Feed() {
     itemsPerPage: 10,
   });
 
-  const { data: feedPurchasesData, isLoading, error } = useFeedPurchases(filters.batchId);
+  const { data: feedPurchasesData, isLoading, error } = useFeedPurchases(filters.batchId, filters.page, filters.limit);
   const feedPurchases = feedPurchasesData?.feedPurchases || feedPurchasesData || [];
 
   // Update pagination state when data changes
@@ -200,12 +202,15 @@ export default function Feed() {
   };
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    if (key === 'batchId') {
+      setFilters((prev) => ({ ...prev, batchId: value, page:1 }));
+      setPagination(prev => ({ ...prev, currentPage:1 }));
+    }
   };
 
   const handlePageChange = (page: number) => {
-    // For now, we'll just refetch - in a real implementation you'd pass page to the hook
-    // Since the hook doesn't support pagination yet, we'll just refetch
+    setFilters(prev => ({ ...prev, page }));
+    setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
   if (isLoading) {

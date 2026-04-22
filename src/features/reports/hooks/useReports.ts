@@ -28,6 +28,7 @@ export interface BatchReport {
   mortalityPercent: number;
   currentLive: number;
   totalFeedKg: number;
+  feedConsumedKg: number;
   totalFeedCost: number;
   docCost: number;
   miscExpenses: number;

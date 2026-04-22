@@ -27,6 +27,17 @@ export async function GET(
       .eq('id', id)
       .single();
 
+    // Fetch actual feed consumed (usages) for this batch
+    const { data: feedUsages, error: usagesError } = await supabase
+      .from('feed_usages')
+      .select('kg')
+      .eq('batch_id', id)
+      .eq('is_deleted', false);
+
+    if (usagesError) {
+      console.error('Error fetching feed usages:', usagesError);
+    }
+
     if (batchError) {
       console.error('Error fetching batch:', batchError);
       return NextResponse.json({ error: batchError.message }, { status: 500 });
@@ -41,11 +52,15 @@ export async function GET(
     const totalBirds = (batch.doc_purchased_count || 0) + (batch.doc_free_count || 0);
     const totalMortality = batch.total_mortality || 0;
     const currentLive = batch.current_live || 0;
-    const totalFeedKg = batch.feed_purchases?.reduce((sum: number, fp: any) => 
+    const totalFeedKg = batch.feed_purchases?.reduce((sum: number, fp: any) =>
       sum + (fp.is_deleted ? 0 : parseFloat(fp.kg) || 0), 0) || 0;
-    
+
+    // Calculate actual feed consumed from usages (for accurate FCR)
+    const feedConsumedKg = (feedUsages || []).reduce((sum: number, fu: any) =>
+      sum + parseFloat(fu.kg || 0), 0) || 0;
+
     // Calculate total feed cost from feed purchases
-    const totalFeedCost = batch.feed_purchases?.reduce((sum: number, fp: any) => 
+    const totalFeedCost = batch.feed_purchases?.reduce((sum: number, fp: any) =>
       sum + (fp.is_deleted ? 0 : parseFloat(fp.total_cost) || 0), 0) || 0;
     
     // Calculate total revenue from orders
@@ -99,7 +114,7 @@ export async function GET(
 
     // Calculate FCR using proper formula (feed consumed per kg weight gain)
     // Weight gain = final live weight - initial weight (assuming initial weight is negligible)
-    const fcr = calculateFCR(totalFeedKg, finalLiveWeight);
+    const fcr = calculateFCR(feedConsumedKg, finalLiveWeight);
 
     // Calculate dressing percentage using weights
     const dressingPercentage = calculateDressingPercentage(totalDressedWeightKg, finalLiveWeight);
@@ -137,6 +152,7 @@ export async function GET(
       mortalityPercent,
       currentLive,
       totalFeedKg,
+      feedConsumedKg,
       totalFeedCost,
       docCost,
       miscExpenses,
