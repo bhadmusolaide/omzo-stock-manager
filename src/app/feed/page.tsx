@@ -226,7 +226,7 @@ export default function Feed() {
   const totalFeedCost = feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.total_cost || 0), 0) || 0;
   const avgCostPerKg = totalFeedKg > 0 ? totalFeedCost / totalFeedKg : 0;
   const feedTypes = [...new Set(feedPurchases?.map((p: FeedPurchase) => p.feed_type).filter(Boolean) || [])];
-  const remainingFeeds = filters.batchId ? batchRemaining : (totalFeedKg - totalUsed);
+  const remainingFeeds = filters.batchId ? batchRemaining : Math.max(0, totalFeedKg - totalUsed);
 
   return (
     <div className="max-w-7xl mx-auto p-6 transition-colors duration-300">

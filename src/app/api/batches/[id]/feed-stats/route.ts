@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClientServiceRole } from '@/lib/supabase';
+import { getRemainingFeedWithBorrows } from '@/lib/services/feedService';
 
 export async function GET(
   _request: NextRequest,
@@ -60,10 +61,26 @@ export async function GET(
 
     const totalUsed = usedData?.reduce((sum, f) => sum + f.kg, 0) || 0;
 
+    // Get feed borrow stats (includes both borrowed out and borrowed in for PENDING status)
+    let borrowedOut = 0;
+    let borrowedIn = 0;
+    try {
+      const borrowStats = await getRemainingFeedWithBorrows(batchId);
+      borrowedOut = borrowStats.borrowedOut || 0;
+      borrowedIn = borrowStats.borrowedIn || 0;
+    } catch (error) {
+      console.warn('Could not fetch borrow stats:', error);
+    }
+
+    // Calculate remaining: purchased - used - borrowed out + borrowed in
+    const remaining = totalPurchased - totalUsed - borrowedOut + borrowedIn;
+
     return NextResponse.json({
       purchased: totalPurchased,
       used: totalUsed,
-      remaining: totalPurchased - totalUsed
+      borrowedOut,
+      borrowedIn,
+      remaining
     });
   } catch (error) {
     console.error('Error in feed-stats API:', error);
