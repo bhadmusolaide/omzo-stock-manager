@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
           status
         )
       `, { count: 'exact' })
-      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (batchId) {
@@ -55,7 +55,9 @@ export async function GET(request: NextRequest) {
             ),
             processing_outputs (
               total_weight_kg,
-              quantity
+              quantity,
+              output_type,
+              unit_count
             )
           `)
           .in('id', batchIds);
@@ -77,6 +79,16 @@ export async function GET(request: NextRequest) {
 
             const dressingPercentage = finalLiveWeight > 0 ? (totalDressedWeightKg / finalLiveWeight) * 100 : 0;
 
+            const productStats: Record<string, { count: number, weight: number }> = {};
+            batch.processing_outputs?.forEach((po: any) => {
+              const pType = po.output_type || po.product_name; // Handle both schemas
+              if (pType) {
+                if (!productStats[pType]) productStats[pType] = { count: 0, weight: 0 };
+                productStats[pType].count += parseFloat(po.unit_count || po.count || 0);
+                productStats[pType].weight += parseFloat(po.total_weight_kg || po.quantity || 0);
+              }
+            });
+
             batchSummaries[batch.id] = {
               id: batch.id,
               name: batch.name,
@@ -84,6 +96,7 @@ export async function GET(request: NextRequest) {
               dressingPercentage: parseFloat(dressingPercentage.toFixed(2)),
               totalDressedWeightKg: parseFloat(totalDressedWeightKg.toFixed(2)),
               finalLiveWeight: parseFloat(finalLiveWeight.toFixed(2)),
+              productStats,
             };
           }
         }
@@ -91,18 +104,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform to camelCase
-    const transformedInventory = inventory?.map((item: any) => ({
-      id: item.id,
-      productType: item.product_type,
-      batchId: item.batch_id,
-      batchName: item.batches?.name || 'Unassigned',
-      batchStatus: item.batches?.status || 'UNKNOWN',
-      availableCount: item.available_count,
-      availableWeightKg: item.available_weight_kg,
-      unitPrice: item.unit_price,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at,
-    })) || [];
+    const transformedInventory = inventory?.map((item: any) => {
+      const stats = item.batch_id && batchSummaries[item.batch_id]?.productStats?.[item.product_type];
+      return {
+        id: item.id,
+        productType: item.product_type,
+        batchId: item.batch_id,
+        batchName: item.batches?.name || 'Unassigned',
+        batchStatus: item.batches?.status || 'UNKNOWN',
+        availableCount: item.available_count,
+        availableWeightKg: item.available_weight_kg,
+        processedCount: stats?.count || 0,
+        processedWeightKg: stats?.weight || 0,
+        unitPrice: item.unit_price,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      };
+    }) || [];
 
     const totalItems = count || 0;
     const totalPages = Math.ceil(totalItems / limit);

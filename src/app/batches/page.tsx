@@ -9,6 +9,7 @@ import InsightBadges from "@/components/InsightBadges";
 import Loading from "@/components/ui/Loading";
 import AddBatchModal from "@/features/batches/components/AddBatchModal";
 import EditBatchModal from "@/features/batches/components/EditBatchModal";
+import ProcessingHistoryModal from "@/features/batches/components/ProcessingHistoryModal";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { formatCurrency } from "@/utils/currency";
 import { useBatches, useDeleteBatch } from "@/features/batches/hooks/useBatches";
@@ -42,6 +43,7 @@ export default function Batches() {
     deleteBatchId,
     setDeleteBatch
   } = useUiStore();
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -112,8 +114,7 @@ export default function Batches() {
       const supabase = createSupabaseClient();
       const { data, error } = await supabase
         .from('processing_events')
-        .select('live_birds_processed')
-        .eq('is_deleted', false);
+        .select('live_birds_processed');
       if (error) throw error;
       return data;
     },
@@ -197,6 +198,12 @@ export default function Batches() {
              <p className="text-gray-600 dark:text-slate-400 mt-1">Manage and track your poultry batches</p>
            </div>
            <div className="flex gap-3">
+             <Button variant="outline" onClick={() => setIsHistoryModalOpen(true)} className="flex items-center gap-2">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+               </svg>
+               Processing History
+             </Button>
              <Button onClick={() => setAddBatchOpen(true)} className="flex items-center gap-2">
                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -288,6 +295,10 @@ export default function Batches() {
         isLoading={deleteBatchMutation.isPending}
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
+      />
+      <ProcessingHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
       />
     </div>
   );

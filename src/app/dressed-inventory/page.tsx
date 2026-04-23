@@ -9,6 +9,7 @@ import Loading from '@/components/ui/Loading';
 import { formatCurrency } from '@/utils/currency';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import { toast } from '@/store/toast';
+import ProcessingHistoryModal from "@/features/batches/components/ProcessingHistoryModal";
 
 interface DressedInventoryItem {
   id: string;
@@ -16,6 +17,8 @@ interface DressedInventoryItem {
   batchId: string | null;
   batchName: string;
   batchStatus: string;
+  processedCount?: number;
+  processedWeightKg?: number;
   availableCount: number;
   availableWeightKg: number;
   unitPrice: number;
@@ -49,6 +52,7 @@ export default function DressedInventoryPage() {
   const [adjustForm, setAdjustForm] = useState<AdjustInventoryForm>({ productType: '' });
   const [newProductForm, setNewProductForm] = useState<NewProductForm>({ productType: '' }); // Add state for new product form
   const [showClosedBatches, setShowClosedBatches] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [batchSummaries, setBatchSummaries] = useState<Record<string, any>>({});
 
   const [pagination, setPagination] = useState({
@@ -181,11 +185,26 @@ export default function DressedInventoryPage() {
     return acc;
   }, {} as Record<string, DressedInventoryItem[]>);
 
-  const batchNames = Object.keys(groupedInventory).sort();
+  const batchNames = Object.keys(groupedInventory).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+
+    const maxDateA = Math.max(...groupedInventory[a].map(item => new Date(item.createdAt).getTime()));
+    const maxDateB = Math.max(...groupedInventory[b].map(item => new Date(item.createdAt).getTime()));
+
+    return maxDateB - maxDateA;
+  });
 
   const columns = [
     { key: 'productType', header: 'Product Type', minWidth: '120px' },
     { key: 'batchName', header: 'Batch', minWidth: '100px' },
+    { key: 'processedCount', header: 'Processed Count', minWidth: '100px' },
+    {
+      key: 'processedWeightKg',
+      header: 'Processed Weight (kg)',
+      minWidth: '120px',
+      render: (value: number) => value?.toFixed(3) || '0.000'
+    },
     { key: 'availableCount', header: 'Available Count', minWidth: '100px' },
     {
       key: 'availableWeightKg',
@@ -195,7 +214,7 @@ export default function DressedInventoryPage() {
     },
     {
       key: 'unitPrice',
-      header: 'Unit Price',
+      header: 'Unit Cost',
       minWidth: '100px',
       render: (value: number) => formatCurrency(value)
     },
@@ -233,6 +252,16 @@ export default function DressedInventoryPage() {
              <p className="text-gray-600 dark:text-slate-400 mt-1">Manage processed poultry products and stock levels</p>
            </div>
            <div className="flex gap-2">
+             <Button
+               variant="outline"
+               onClick={() => setIsHistoryModalOpen(true)}
+               className="flex items-center gap-2"
+             >
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+               </svg>
+               Processing History
+             </Button>
              <Button
                variant="outline"
                onClick={() => setShowClosedBatches(!showClosedBatches)}
@@ -402,6 +431,11 @@ export default function DressedInventoryPage() {
           </Card>
         </div>
       )}
+
+      <ProcessingHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+      />
     </div>
   );
 }

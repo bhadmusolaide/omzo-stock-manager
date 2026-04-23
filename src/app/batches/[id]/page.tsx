@@ -11,6 +11,7 @@ import BatchStatusBadge from '@/components/ui/BatchStatusBadge';
 import Loading from '@/components/ui/Loading';
 import EditBatchModal from '@/features/batches/components/EditBatchModal';
 import ProcessingModal from '@/features/batches/components/ProcessingModal';
+import ProcessingHistoryTable from '@/features/batches/components/ProcessingHistoryTable';
 import FeedUsageModal from '@/components/FeedUsageModal';
 import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
@@ -743,7 +744,7 @@ export default function BatchDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="processing" className="mt-4">
+        <TabsContent value="processing" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Batch Processing</CardTitle>
@@ -755,6 +756,16 @@ export default function BatchDetail() {
               </Button>
               {batch.currentLive <= 0 && <p className="text-red-500 mt-2">No live birds available for processing.</p>}
               {!settings && <p className="text-yellow-500 mt-2">Settings not loaded. Allocation mode unavailable.</p>}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Processing History</CardTitle>
+              <p className="text-gray-600 dark:text-slate-400">Past processing events for this batch</p>
+            </CardHeader>
+            <CardContent>
+              <ProcessingHistoryTable batchId={batchId} />
             </CardContent>
           </Card>
         </TabsContent>
