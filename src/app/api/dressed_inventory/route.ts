@@ -7,21 +7,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
     const productType = searchParams.get('productType');
-    const lowStockOnly = searchParams.get('lowStockOnly') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
-
-    // Fetch settings to get the low stock threshold
-    let lowStockThreshold = 50; // Default value
-    try {
-      const { data: settings } = await supabase.from('settings').select('low_stock_threshold').single();
-      if (settings && settings.low_stock_threshold !== undefined) {
-        lowStockThreshold = settings.low_stock_threshold;
-      }
-    } catch (settingsError) {
-      console.warn('Could not fetch settings, using default low stock threshold of 50');
-    }
 
     let query = supabase
       .from('dressed_inventory')
@@ -29,7 +17,8 @@ export async function GET(request: NextRequest) {
         *,
         batches!batch_id (
           id,
-          name
+          name,
+          status
         )
       `, { count: 'exact' })
       .order('updated_at', { ascending: false })
@@ -43,14 +32,63 @@ export async function GET(request: NextRequest) {
       query = query.eq('product_type', productType);
     }
 
-    if (lowStockOnly) {
-      // Use the low stock threshold from settings
-      query = query.lt('available_count', lowStockThreshold);
-    }
-
     const { data: inventory, error, count } = await query;
 
     if (error) throw error;
+
+    // Fetch batch data for summaries separately to avoid grouping issues
+    const batchSummaries: Record<string, any> = {};
+    if (inventory && inventory.length > 0) {
+      const batchIds = [...new Set(inventory.map((item: any) => item.batch_id).filter(Boolean))];
+
+      if (batchIds.length > 0) {
+        const { data: batchesData } = await supabase
+          .from('batches')
+          .select(`
+            id,
+            name,
+            status,
+            total_weight_kg,
+            processing_events (
+              live_birds_processed,
+              avg_live_weight_kg
+            ),
+            processing_outputs (
+              total_weight_kg,
+              quantity
+            )
+          `)
+          .in('id', batchIds);
+
+        if (batchesData) {
+          for (const batch of batchesData) {
+            // Calculate Dressing Percentage
+            let finalLiveWeight = batch.total_weight_kg || 0;
+            if (finalLiveWeight === 0 && batch.processing_events && batch.processing_events.length > 0) {
+              finalLiveWeight = batch.processing_events.reduce((sum: number, event: any) => {
+                const avgWeight = parseFloat(event.avg_live_weight_kg || 0);
+                const liveBirds = parseInt(event.live_birds_processed || 0);
+                return sum + (avgWeight * liveBirds);
+              }, 0);
+            }
+
+            const totalDressedWeightKg = batch.processing_outputs?.reduce((sum: number, po: any) =>
+              sum + parseFloat(po.total_weight_kg || po.quantity || 0), 0) || 0;
+
+            const dressingPercentage = finalLiveWeight > 0 ? (totalDressedWeightKg / finalLiveWeight) * 100 : 0;
+
+            batchSummaries[batch.id] = {
+              id: batch.id,
+              name: batch.name,
+              status: batch.status,
+              dressingPercentage: parseFloat(dressingPercentage.toFixed(2)),
+              totalDressedWeightKg: parseFloat(totalDressedWeightKg.toFixed(2)),
+              finalLiveWeight: parseFloat(finalLiveWeight.toFixed(2)),
+            };
+          }
+        }
+      }
+    }
 
     // Transform to camelCase
     const transformedInventory = inventory?.map((item: any) => ({
@@ -58,12 +96,12 @@ export async function GET(request: NextRequest) {
       productType: item.product_type,
       batchId: item.batch_id,
       batchName: item.batches?.name || 'Unassigned',
+      batchStatus: item.batches?.status || 'UNKNOWN',
       availableCount: item.available_count,
       availableWeightKg: item.available_weight_kg,
       unitPrice: item.unit_price,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
-      lowStock: item.available_count < lowStockThreshold,  // Use settings threshold
     })) || [];
 
     const totalItems = count || 0;
@@ -71,6 +109,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       inventory: transformedInventory,
+      batchSummaries,
       currentPage: page,
       totalPages,
       totalItems,

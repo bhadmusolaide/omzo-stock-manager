@@ -562,6 +562,64 @@ export async function DELETE(
 
         console.log(`Live order deleted: Restored ${totalBirdsToRestore} birds to batch ${order.linked_batch_id}`);
       }
+    } else if (order.order_type !== 'LIVE' && order.linked_batch_id) {
+      // DRESSED order: restore inventory
+      for (const item of order.order_items || []) {
+        const restoreCount = (item.price_mode === 'COUNT' || item.price_mode === 'COUNT_KG') ? (item.qty_count || item.quantity) : 0;
+        const restoreWeight = (item.price_mode === 'KG' || item.price_mode === 'COUNT_KG') ? (item.qty_weight || item.quantity) : 0;
+
+        if (restoreCount > 0 || restoreWeight > 0) {
+          // Find existing inventory entries for this product and batch
+          const { data: inventoryList, error: fetchError } = await supabase
+            .from('dressed_inventory')
+            .select('*')
+            .eq('product_type', item.product_name)
+            .eq('batch_id', order.linked_batch_id)
+            .order('updated_at', { ascending: false });
+
+          if (fetchError) {
+            console.error('Error fetching inventory for restoration:', fetchError);
+            return NextResponse.json({ error: fetchError.message }, { status: 500 });
+          }
+
+          // Create a new inventory entry if none exists
+          if (!inventoryList || inventoryList.length === 0) {
+            const { error: createError } = await supabase
+              .from('dressed_inventory')
+              .insert({
+                product_type: item.product_name,
+                batch_id: order.linked_batch_id,
+                available_count: restoreCount,
+                available_weight_kg: restoreWeight,
+                unit_price: item.unit_price || 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            if (createError) {
+              console.error('Error creating inventory entry for restoration:', createError);
+              return NextResponse.json({ error: createError.message }, { status: 500 });
+            }
+          } else {
+            // Add back to the most recent inventory entry
+            const latestInventory = inventoryList[0];
+            const { error: updateError } = await supabase
+              .from('dressed_inventory')
+              .update({
+                available_count: (latestInventory.available_count || 0) + restoreCount,
+                available_weight_kg: (latestInventory.available_weight_kg || 0) + restoreWeight,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', latestInventory.id);
+
+            if (updateError) {
+              console.error('Error updating inventory for restoration:', updateError);
+              return NextResponse.json({ error: updateError.message }, { status: 500 });
+            }
+          }
+        }
+      }
+      console.log(`Dressed order deleted: Restored inventory to batch ${order.linked_batch_id}`);
     }
 
     // Delete the order (order_items will be cascade deleted)

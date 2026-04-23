@@ -116,6 +116,44 @@ export async function POST(request: NextRequest) {
       updatedAt: updatedInventory.updated_at,
     };
 
+    // Check if batch should be closed (zero live birds AND zero dressed inventory)
+    if (updatedInventory.batch_id) {
+      const batchId = updatedInventory.batch_id;
+      // Get current live birds
+      const { data: batchData } = await supabase
+        .from('batches')
+        .select('current_live, status')
+        .eq('id', batchId)
+        .single();
+
+      if (batchData && batchData.status !== 'CLOSED') {
+        const currentLive = batchData.current_live || 0;
+
+        // Get dressed inventory
+        const { data: dressedInventory } = await supabase
+          .from('dressed_inventory')
+          .select('available_count, available_weight_kg')
+          .eq('batch_id', batchId)
+          .eq('is_deleted', false);
+
+        const totalDressedCount = dressedInventory?.reduce((sum, item) => sum + (item.available_count || 0), 0) || 0;
+        const totalDressedWeight = dressedInventory?.reduce((sum, item) => sum + (item.available_weight_kg || 0), 0) || 0;
+
+        if (currentLive <= 0 && totalDressedCount <= 0 && totalDressedWeight <= 0) {
+          // Mark batch as CLOSED
+          await supabase
+            .from('batches')
+            .update({
+              status: 'CLOSED',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', batchId);
+
+          console.log(`Auto-closed batch ${batchId} after manual adjustment as inventory is empty.`);
+        }
+      }
+    }
+
     return NextResponse.json({
       message: 'Inventory adjusted successfully',
       inventory: transformedInventory,

@@ -386,6 +386,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check if batch should be closed (zero live birds AND zero dressed inventory)
+    if (validatedData.linkedBatchId) {
+      // Get current live birds
+      const { data: batchData } = await supabase
+        .from('batches')
+        .select('current_live, status')
+        .eq('id', validatedData.linkedBatchId)
+        .single();
+
+      if (batchData && batchData.status !== 'CLOSED') {
+        const currentLive = batchData.current_live || 0;
+
+        // Get dressed inventory
+        const { data: dressedInventory } = await supabase
+          .from('dressed_inventory')
+          .select('available_count, available_weight_kg')
+          .eq('batch_id', validatedData.linkedBatchId);
+
+        const totalDressedCount = dressedInventory?.reduce((sum, item) => sum + (item.available_count || 0), 0) || 0;
+        const totalDressedWeight = dressedInventory?.reduce((sum, item) => sum + (item.available_weight_kg || 0), 0) || 0;
+
+        if (currentLive <= 0 && totalDressedCount <= 0 && totalDressedWeight <= 0) {
+          // Mark batch as CLOSED
+          await supabase
+            .from('batches')
+            .update({
+              status: 'CLOSED',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', validatedData.linkedBatchId);
+
+          console.log(`Auto-closed batch ${validatedData.linkedBatchId} as inventory is empty.`);
+        }
+      }
+    }
+
     // Fetch the order with relations
     const { data: fullOrder, error: fetchError } = await supabase
       .from('orders')

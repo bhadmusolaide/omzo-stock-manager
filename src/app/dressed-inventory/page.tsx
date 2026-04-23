@@ -15,12 +15,12 @@ interface DressedInventoryItem {
   productType: string;
   batchId: string | null;
   batchName: string;
+  batchStatus: string;
   availableCount: number;
   availableWeightKg: number;
   unitPrice: number;
   createdAt: string;
   updatedAt: string;
-  lowStock: boolean;
 }
 
 interface AdjustInventoryForm {
@@ -48,8 +48,8 @@ export default function DressedInventoryPage() {
   const [selectedItem, setSelectedItem] = useState<DressedInventoryItem | null>(null);
   const [adjustForm, setAdjustForm] = useState<AdjustInventoryForm>({ productType: '' });
   const [newProductForm, setNewProductForm] = useState<NewProductForm>({ productType: '' }); // Add state for new product form
-  const { data: settings } = useSettings();
-  const lowStockThreshold = settings?.lowStockThreshold || 50;
+  const [showClosedBatches, setShowClosedBatches] = useState(false);
+  const [batchSummaries, setBatchSummaries] = useState<Record<string, any>>({});
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -61,14 +61,14 @@ export default function DressedInventoryPage() {
   const fetchInventory = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      params.append('lowStockOnly', 'false');
-      params.append('page', pagination.currentPage.toString());
-      params.append('limit', pagination.itemsPerPage.toString());
+      params.append('page', '1');
+      params.append('limit', '1000'); // Fetch all to group by batch properly
 
       const response = await fetch(`/api/dressed_inventory?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setInventory(data.inventory || data);
+        setBatchSummaries(data.batchSummaries || {});
         setPagination(prev => ({
           ...prev,
           currentPage: data.currentPage || prev.currentPage,
@@ -161,14 +161,27 @@ export default function DressedInventoryPage() {
   if (loading) return <Loading text="Loading inventory..." className="p-6" />;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
-  const lowStockItems = inventory.filter(item => item.lowStock);
-  const hasLowStock = lowStockItems.length > 0;
+  // Filter inventory
+  const filteredInventory = inventory.filter(item => {
+    if (!showClosedBatches && item.batchStatus === 'CLOSED') return false;
+    return true;
+  });
 
   // Calculate inventory metrics
-  const totalProducts = inventory.length;
-  const totalWeight = inventory.reduce((sum, item) => sum + item.availableWeightKg, 0);
-  const totalValue = inventory.reduce((sum, item) => sum + (item.availableCount * item.unitPrice), 0);
-  const uniqueProductTypes = [...new Set(inventory.map(item => item.productType))].length;
+  const totalProducts = filteredInventory.length;
+  const totalWeight = filteredInventory.reduce((sum, item) => sum + item.availableWeightKg, 0);
+  const totalValue = filteredInventory.reduce((sum, item) => sum + ((item.availableWeightKg && item.availableWeightKg > 0) ? (item.availableWeightKg * item.unitPrice) : (item.availableCount * item.unitPrice)), 0);
+  const uniqueProductTypes = [...new Set(filteredInventory.map(item => item.productType))].length;
+
+  // Group inventory by batchName
+  const groupedInventory = filteredInventory.reduce((acc, item) => {
+    const batchName = item.batchName || 'Unassigned';
+    if (!acc[batchName]) acc[batchName] = [];
+    acc[batchName].push(item);
+    return acc;
+  }, {} as Record<string, DressedInventoryItem[]>);
+
+  const batchNames = Object.keys(groupedInventory).sort();
 
   const columns = [
     { key: 'productType', header: 'Product Type', minWidth: '120px' },
@@ -185,20 +198,6 @@ export default function DressedInventoryPage() {
       header: 'Unit Price',
       minWidth: '100px',
       render: (value: number) => formatCurrency(value)
-    },
-    {
-      key: 'lowStock',
-      header: 'Low Stock',
-      minWidth: '90px',
-      render: (value: boolean) => value ? (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/20 text-red-900 dark:text-red-400 border border-red-200 dark:border-red-600">
-          Low Stock
-        </span>
-      ) : (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-900 dark:text-green-400 border border-green-200 dark:border-green-600">
-          In Stock
-        </span>
-      )
     },
     {
       key: 'actions',
@@ -225,12 +224,6 @@ export default function DressedInventoryPage() {
     },
   ];
 
-  const lowStockColumns = [
-    { key: 'productType', header: 'Product', minWidth: '120px', render: (_: unknown, row: DressedInventoryItem) => <span className="font-medium text-gray-900 dark:text-slate-100">{row.productType}</span> }, // Fixed: specified type for _
-    { key: 'availableCount', header: 'Available', minWidth: '100px', render: (_: unknown, row: DressedInventoryItem) => <span className="text-red-600 dark:text-red-400 font-semibold">{row.availableCount}</span> }, // Fixed: specified type for _
-    { key: 'batchName', header: 'Batch', minWidth: '100px' },
-  ];
-
   return (
     <div className="max-w-7xl mx-auto p-6 transition-colors duration-300">
        <div className="mb-8">
@@ -240,20 +233,18 @@ export default function DressedInventoryPage() {
              <p className="text-gray-600 dark:text-slate-400 mt-1">Manage processed poultry products and stock levels</p>
            </div>
            <div className="flex gap-2">
+             <Button
+               variant="outline"
+               onClick={() => setShowClosedBatches(!showClosedBatches)}
+             >
+               {showClosedBatches ? 'Hide Closed Batches' : 'Show Closed Batches'}
+             </Button>
              <Button onClick={() => setShowNewProductModal(true)}>Create New Product Type</Button>
-             {hasLowStock && (
-               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded-lg flex items-center gap-2 transition-colors duration-300">
-                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                 </svg>
-                 {lowStockItems.length} low stock items
-               </div>
-             )}
            </div>
          </div>
 
          {/* Summary Cards */}
-         {inventory.length > 0 && (
+         {filteredInventory.length > 0 && (
            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Products</div>
@@ -275,38 +266,61 @@ export default function DressedInventoryPage() {
          )}
        </div>
 
-       <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
-         <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
-           <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Available Stock</h2>
-           <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Current inventory levels and product details</p>
-         </div>
-         <div className="p-6">
-           <Table
-             columns={columns}
-             data={inventory}
-             pagination={{
-               currentPage: pagination.currentPage,
-               totalPages: pagination.totalPages,
-               totalItems: pagination.totalItems,
-               itemsPerPage: pagination.itemsPerPage,
-               onPageChange: handlePageChange,
-             }}
-           />
-         </div>
-       </div>
+      <div className="space-y-6">
+        {batchNames.map(batchName => {
+          const items = groupedInventory[batchName];
+          const batchId = items[0]?.batchId;
+          const summary = batchId ? batchSummaries[batchId] : null;
+          const batchValue = items.reduce((sum, item) => sum + ((item.availableWeightKg && item.availableWeightKg > 0) ? (item.availableWeightKg * item.unitPrice) : (item.availableCount * item.unitPrice)), 0);
 
-      {/* Low Stock Warnings */}
-      {hasLowStock && (
-        <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden mt-6 transition-colors duration-300">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Low Stock Warnings</h2>
-            <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Items below {lowStockThreshold} units requiring attention</p>
+          return (
+          <div key={batchName} className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800/50 flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                  {batchName}
+                  {summary?.status === 'CLOSED' && (
+                    <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded bg-gray-200 text-gray-700 dark:bg-slate-600 dark:text-gray-300">CLOSED</span>
+                  )}
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  Processed inventory for this batch
+                </p>
+              </div>
+
+              {summary && summary.dressingPercentage > 0 && (
+                <div className="flex gap-4 text-sm">
+                  <div className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded border border-gray-200 dark:border-slate-600 shadow-sm flex flex-col items-end">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Yield / Dressing %</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">{summary.dressingPercentage}%</span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded border border-gray-200 dark:border-slate-600 shadow-sm flex flex-col items-end">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Est. Retail Value</span>
+                    <span className="font-bold text-purple-600 dark:text-purple-400">{formatCurrency(batchValue)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-6">
+              <Table
+                columns={columns.filter(c => c.key !== 'batchName')}
+                data={items}
+              />
+            </div>
           </div>
-          <div className="p-6">
-            <Table columns={lowStockColumns} data={lowStockItems} />
+        )})}
+
+        {batchNames.length === 0 && (
+          <div className="bg-white dark:bg-slate-700 shadow-lg dark:shadow-slate-900/50 rounded-lg overflow-hidden transition-colors duration-300">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-600">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Available Stock</h2>
+            </div>
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+              No inventory found.
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* New Product Modal */}
       {showNewProductModal && (
