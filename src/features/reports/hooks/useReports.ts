@@ -11,6 +11,7 @@ export interface OverviewMetrics {
   assignedFeedKg: number;
   remainingFeedKg: number;
   outstandingOrderBalance: number;
+  totalEstDailyFeedKg?: number;
 }
 
 export interface FeedBorrowMetrics {

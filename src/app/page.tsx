@@ -127,6 +127,14 @@ export default function Home() {
               icon={Package}
               color="blue"
             />
+            {activeOnly && (
+              <KPICard
+                title="Est. Daily Feed Consumption"
+                value={`${(metrics?.totalEstDailyFeedKg || 0).toFixed(2)} kg/day`}
+                icon={Package}
+                color="blue"
+              />
+            )}
             <KPICard
               title="Outstanding Orders"
               value={formatCurrency(metrics?.outstandingOrderBalance || 0)}

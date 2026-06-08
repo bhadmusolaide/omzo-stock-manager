@@ -1,5 +1,6 @@
 import { createClientServiceRole } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { getEstimatedDailyFeedConsumption } from '@/utils/calculations';
 
 export async function GET(request: Request) {
   try {
@@ -97,6 +98,21 @@ export async function GET(request: Request) {
       return sum + batchBalance;
     }, 0);
 
+    // Calculate total estimated daily feed consumption for active batches
+    const totalEstDailyFeedKg = filteredBatches
+      .filter((b: any) => b.status !== 'CLOSED')
+      .reduce((sum: number, b: any) => {
+        const totalChicks = (b.doc_purchased_count || 0) + (b.doc_free_count || 0);
+        const currentLive = Math.max(0, totalChicks - (b.total_mortality || 0));
+
+        const consumption = getEstimatedDailyFeedConsumption({
+          currentLive,
+          startDate: b.start_date
+        });
+
+        return sum + (consumption.estimatedConsumptionKg || 0);
+      }, 0);
+
     return NextResponse.json({
       totalIncome,
       totalExpenses,
@@ -108,6 +124,7 @@ export async function GET(request: Request) {
       assignedFeedKg,
       remainingFeedKg,
       outstandingOrderBalance,
+      totalEstDailyFeedKg: parseFloat(totalEstDailyFeedKg.toFixed(2)),
     });
   } catch (error) {
     console.error('Error fetching overview:', error);
