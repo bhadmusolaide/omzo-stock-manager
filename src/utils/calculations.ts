@@ -118,20 +118,88 @@ export function calculateProfitPerDressedKg(
   return totalDressedWeightKg > 0 ? profit / totalDressedWeightKg : 0;
 }
 
+// Aviagen Arbor Acres 2022 As-Hatched Daily Intake (g) - up to 60 days
+export const AVIAGEN_AA_INTAKE_OBJ = [
+   13,  13,  17,  20,  24,  28,  31,  // Week 1 (Days 0-6)
+   35,  39,  44,  48,  53,  57,  62,  // Week 2 (Days 7-13)
+   67,  73,  78,  83,  89,  95, 101,  // Week 3 (Days 14-20)
+  106, 112, 118, 124, 130, 135, 141,  // Week 4 (Days 21-27)
+  146, 152, 157, 162, 167, 172, 177,  // Week 5 (Days 28-34)
+  181, 186, 190, 194, 198, 202, 206,  // Week 6 (Days 35-41)
+  210, 213, 216, 219, 222, 224, 226,  // Week 7 (Days 42-48)
+  228, 230, 232, 233, 234, 235, 236,  // Week 8 (Days 49-55)
+  237, 237, 238, 237, 237             // Week 9+ (Days 56-60)
+];
+
 /**
  * Get estimated daily feed consumption based on batch age
  */
 export function getEstimatedDailyFeedConsumption(batch: any): { estimatedConsumptionKg: number; intakeG: number; ageInDays: number } {
-  // A rough estimate placeholder (e.g., 150g per bird per day)
-  const intakeG = 150;
+  // Calculate age in days
+  const startDateStr = batch?.startDate || batch?.placementDate;
+  let ageInDays = 0;
+  if (startDateStr) {
+    const startDate = new Date(startDateStr);
+    const today = new Date();
+    // Reset times to start of day for accurate day calculation
+    startDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    if (today >= startDate) {
+      const diffTime = Math.abs(today.getTime() - startDate.getTime());
+      ageInDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  // Cap at max length of our array
+  const lookupAge = Math.min(ageInDays, AVIAGEN_AA_INTAKE_OBJ.length - 1);
+  const intakeG = AVIAGEN_AA_INTAKE_OBJ[lookupAge];
+
   const currentLive = batch?.currentLive || 0;
   const estimatedConsumptionKg = (currentLive * intakeG) / 1000;
 
-  // Calculate age in days
-  const placementDate = batch?.placementDate ? new Date(batch.placementDate) : new Date();
-  const today = new Date();
-  const diffTime = Math.abs(today.getTime() - placementDate.getTime());
-  const ageInDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
   return { estimatedConsumptionKg, intakeG, ageInDays };
+}
+
+export interface FeedProjection {
+  targetAgeDays: number;
+  label: string;
+  kgNeeded: number;
+  bagsNeeded: number;
+  isReached: boolean;
+}
+
+/**
+ * Project feed needed to reach specific milestones (4, 5, and 6 weeks)
+ */
+export function getFeedProjections(currentAgeInDays: number, currentLive: number): FeedProjection[] {
+  const milestones = [
+    { targetAgeDays: 28, label: '4 Weeks' }, // 28 days
+    { targetAgeDays: 35, label: '5 Weeks' }, // 35 days
+    { targetAgeDays: 42, label: '6 Weeks' }, // 42 days
+  ];
+
+  return milestones.map(milestone => {
+    let gramsNeeded = 0;
+    const isReached = currentAgeInDays >= milestone.targetAgeDays;
+
+    if (!isReached) {
+      // Sum intake from current day up to (but not including) target day
+      for (let day = currentAgeInDays; day < milestone.targetAgeDays; day++) {
+        const lookupAge = Math.min(day, AVIAGEN_AA_INTAKE_OBJ.length - 1);
+        gramsNeeded += AVIAGEN_AA_INTAKE_OBJ[lookupAge];
+      }
+    }
+
+    const kgNeeded = (gramsNeeded * currentLive) / 1000;
+    const bagsNeeded = kgNeeded / 25; // Assuming 25kg per bag
+
+    return {
+      targetAgeDays: milestone.targetAgeDays,
+      label: milestone.label,
+      kgNeeded,
+      bagsNeeded,
+      isReached
+    };
+  });
 }

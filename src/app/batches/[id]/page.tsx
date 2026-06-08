@@ -15,7 +15,7 @@ import ProcessingHistoryTable from '@/features/batches/components/ProcessingHist
 import FeedUsageModal from '@/components/FeedUsageModal';
 import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
-import { calculateEffectiveUnitCost, getEstimatedDailyFeedConsumption } from '@/utils/calculations';
+import { calculateEffectiveUnitCost, getEstimatedDailyFeedConsumption, getFeedProjections } from '@/utils/calculations';
 import { getFeedBorrowStats } from '@/lib/services/feedService';
 import logger from '@/lib/logger';
 
@@ -403,6 +403,11 @@ export default function BatchDetail() {
     ? getEstimatedDailyFeedConsumption(batch)
     : null;
 
+  // Feed projections to hit milestones
+  const feedProjections = batch && batch.currentLive > 0 && estimatedDailyFeed
+    ? getFeedProjections(estimatedDailyFeed.ageInDays, batch.currentLive)
+    : [];
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
@@ -534,6 +539,57 @@ export default function BatchDetail() {
               </CardContent>
             </Card>
           </div>
+
+          {feedProjections.length > 0 && feedProjections.some(p => !p.isReached) && (
+            <Card className="mt-4 border-blue-100 dark:border-blue-900/50 shadow-sm">
+              <CardHeader className="bg-blue-50/50 dark:bg-blue-900/10 border-b border-blue-100 dark:border-blue-900/50 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  Feed Projections
+                </CardTitle>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Estimated feed needed from today to reach target age (25kg/bag)
+                </p>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row gap-4 justify-between">
+                  {feedProjections.map((proj, idx) => (
+                    <div
+                      key={proj.label}
+                      className={`flex-1 relative rounded-xl border p-4 ${proj.isReached ? 'bg-gray-50 border-gray-200 dark:bg-slate-800/50 dark:border-slate-700 opacity-60' : 'bg-white border-blue-100 dark:bg-slate-800 dark:border-blue-900/50 shadow-sm'}`}
+                    >
+                      {/* Connection Line */}
+                      {idx !== feedProjections.length - 1 && (
+                        <div className="hidden md:block absolute top-1/2 -right-4 w-4 border-t-2 border-dashed border-gray-200 dark:border-slate-700 -translate-y-1/2 z-0"></div>
+                      )}
+
+                      <div className="relative z-10 flex flex-col items-center text-center space-y-2">
+                        <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${proj.isReached ? 'bg-gray-200 text-gray-600 dark:bg-slate-700 dark:text-gray-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'}`}>
+                          {proj.label}
+                        </span>
+
+                        {proj.isReached ? (
+                          <p className="text-sm font-medium text-gray-500 py-2 mt-2">Milestone Reached</p>
+                        ) : (
+                          <>
+                            <div className="flex items-baseline gap-1 pt-2">
+                              <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                                {proj.bagsNeeded.toFixed(1)}
+                              </span>
+                              <span className="text-sm text-gray-500">bags</span>
+                            </div>
+                            <p className="text-sm font-medium text-gray-500">
+                              {proj.kgNeeded.toFixed(1)} kg
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="feed" className="mt-4 space-y-4">
@@ -569,15 +625,15 @@ export default function BatchDetail() {
                   </thead>
                   <tbody>
                     {feedUsages.map((usage) => (
-                      <tr key={usage.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                      <tr key={usage.id} className="group relative hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         <td className="border p-2">{new Date(usage.date).toLocaleDateString()}</td>
                         <td className="border p-2">{usage.feed_purchases?.feed_type || 'N/A'}</td>
                         <td className="border p-2">{usage.feed_purchases?.brand || 'N/A'}</td>
                         <td className="border p-2">{usage.kg.toFixed(2)}</td>
                         <td className="border p-2">{usage.feed_purchases?.supplier || 'N/A'}</td>
-                        <td className="border p-2 relative">
+                        <td className="border p-2">
                           {usage.notes || '-'}
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
+                          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
                             <Button
                               size="sm"
                               variant="outline"
@@ -749,14 +805,14 @@ export default function BatchDetail() {
                     </thead>
                     <tbody>
                       {weighings.map((w) => (
-                        <tr key={w.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <tr key={w.id} className="group relative hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           <td className="border p-2">{new Date(w.takenAt).toLocaleDateString()}</td>
                           <td className="border p-2">{w.sampleCount}</td>
                           <td className="border p-2">{w.avgWeightKg.toFixed(3)}</td>
                           <td className="border p-2">{w.totalSampleWeightKg.toFixed(3)}</td>
-                          <td className="border p-2 relative">
+                          <td className="border p-2">
                             {w.notes}
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
+                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
                               <Button
                                 size="sm"
                                 variant="outline"

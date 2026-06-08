@@ -72,7 +72,7 @@ const Table: React.FC<TableProps> = ({ columns, data, className = '', pagination
             </tr>
           ) : (
             data.map((row, index) => (
-              <tr key={index} className="group hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors duration-150">
+              <tr key={index} className="group relative hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors duration-150">
                 {dataCols.map((col, colIndex) => {
                   const value = getValue(row, col.key);
                   const cellContent = col.render ? col.render(value, row) : (value as any)?.toString?.() ?? '';
@@ -87,7 +87,7 @@ const Table: React.FC<TableProps> = ({ columns, data, className = '', pagination
                       key={col.key}
                       className={`px-6 py-4 text-sm text-gray-900 dark:text-slate-200 ${
                         col.truncate ? 'max-w-0' : 'whitespace-nowrap'
-                      } ${isLast ? 'relative' : ''}`}
+                      }`}
                       style={{
                         width: col.width,
                         minWidth: col.minWidth || '120px',
@@ -97,7 +97,7 @@ const Table: React.FC<TableProps> = ({ columns, data, className = '', pagination
                     >
                       {displayText}
                       {isLast && actionsCol && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
                           {actionsCol.render ? actionsCol.render(getValue(row, actionsCol.key), row) : null}
                         </div>
                       )}
