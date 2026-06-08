@@ -15,7 +15,7 @@ import ProcessingHistoryTable from '@/features/batches/components/ProcessingHist
 import FeedUsageModal from '@/components/FeedUsageModal';
 import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
-import { calculateEffectiveUnitCost } from '@/utils/calculations';
+import { calculateEffectiveUnitCost, getEstimatedDailyFeedConsumption } from '@/utils/calculations';
 import { getFeedBorrowStats } from '@/lib/services/feedService';
 import logger from '@/lib/logger';
 
@@ -398,6 +398,11 @@ export default function BatchDetail() {
     );
   };
 
+  // Estimated daily feed consumption based on currentLive and batch age
+  const estimatedDailyFeed = batch && batch.currentLive > 0
+    ? getEstimatedDailyFeedConsumption(batch)
+    : null;
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
@@ -414,7 +419,7 @@ export default function BatchDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader>
                 <CardTitle>Batch Information</CardTitle>
@@ -488,6 +493,46 @@ export default function BatchDetail() {
                 )}
               </CardContent>
             </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Estimated Feed Consumption</CardTitle>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Based on Aviagen Arbor Acres 2022 Broiler Performance Objectives
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-end border-b pb-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Age</p>
+                    <p className="text-2xl font-bold">
+                      {estimatedDailyFeed?.ageInDays ?? 0} <span className="text-sm font-normal">days</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Intake / bird</p>
+                    <p className="text-2xl font-bold">
+                      {estimatedDailyFeed?.intakeG ?? 0} <span className="text-sm font-normal">g</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-end bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                  <div>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">Est. Daily Consumption</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                      {estimatedDailyFeed?.estimatedConsumptionKg.toFixed(2) ?? '0.00'} <span className="text-sm font-normal">kg/day</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ({batch.currentLive} birds � {estimatedDailyFeed?.intakeG ?? 0} g/bird/day)
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-400 text-center">Source: Aviagen AA Broiler Performance Objectives 2022</p>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -520,25 +565,24 @@ export default function BatchDetail() {
                       <th className="border p-2">KG Used</th>
                       <th className="border p-2">Supplier</th>
                       <th className="border p-2">Notes</th>
-                      <th className="border p-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {feedUsages.map((usage) => (
-                      <tr key={usage.id}>
+                      <tr key={usage.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         <td className="border p-2">{new Date(usage.date).toLocaleDateString()}</td>
                         <td className="border p-2">{usage.feed_purchases?.feed_type || 'N/A'}</td>
                         <td className="border p-2">{usage.feed_purchases?.brand || 'N/A'}</td>
                         <td className="border p-2">{usage.kg.toFixed(2)}</td>
                         <td className="border p-2">{usage.feed_purchases?.supplier || 'N/A'}</td>
-                        <td className="border p-2">{usage.notes || '-'}</td>
-                        <td className="border p-2">
-                          <div className="flex gap-2">
+                        <td className="border p-2 relative">
+                          {usage.notes || '-'}
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => startEditingFeedUsage(usage)}
-                              className="text-xs"
+                              className="text-xs h-7 px-2"
                             >
                               Edit
                             </Button>
@@ -546,7 +590,7 @@ export default function BatchDetail() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleDeleteFeedUsage(usage.id)}
-                              className="text-xs text-red-600 hover:text-red-700"
+                              className="text-xs h-7 px-2 text-red-600 hover:text-red-700"
                             >
                               Delete
                             </Button>
@@ -701,24 +745,23 @@ export default function BatchDetail() {
                         <th className="border p-2">Avg Weight (kg)</th>
                         <th className="border p-2">Total Sample Weight (kg)</th>
                         <th className="border p-2">Notes</th>
-                        <th className="border p-2">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {weighings.map((w) => (
-                        <tr key={w.id}>
+                        <tr key={w.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           <td className="border p-2">{new Date(w.takenAt).toLocaleDateString()}</td>
                           <td className="border p-2">{w.sampleCount}</td>
                           <td className="border p-2">{w.avgWeightKg.toFixed(3)}</td>
                           <td className="border p-2">{w.totalSampleWeightKg.toFixed(3)}</td>
-                          <td className="border p-2">{w.notes}</td>
-                          <td className="border p-2">
-                            <div className="flex gap-2">
+                          <td className="border p-2 relative">
+                            {w.notes}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 flex items-center gap-2 z-10 pointer-events-none group-hover:pointer-events-auto">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => startEditing(w)}
-                                className="text-xs"
+                                className="text-xs h-7 px-2"
                               >
                                 Edit
                               </Button>
@@ -726,7 +769,7 @@ export default function BatchDetail() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleDeleteWeighing(w.id)}
-                                className="text-xs text-red-600 hover:text-red-700"
+                                className="text-xs h-7 px-2 text-red-600 hover:text-red-700"
                               >
                                 Delete
                               </Button>

@@ -117,3 +117,21 @@ export function calculateProfitPerDressedKg(
   const profit = revenue - totalCost;
   return totalDressedWeightKg > 0 ? profit / totalDressedWeightKg : 0;
 }
+
+/**
+ * Get estimated daily feed consumption based on batch age
+ */
+export function getEstimatedDailyFeedConsumption(batch: any): { estimatedConsumptionKg: number; intakeG: number; ageInDays: number } {
+  // A rough estimate placeholder (e.g., 150g per bird per day)
+  const intakeG = 150;
+  const currentLive = batch?.currentLive || 0;
+  const estimatedConsumptionKg = (currentLive * intakeG) / 1000;
+
+  // Calculate age in days
+  const placementDate = batch?.placementDate ? new Date(batch.placementDate) : new Date();
+  const today = new Date();
+  const diffTime = Math.abs(today.getTime() - placementDate.getTime());
+  const ageInDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return { estimatedConsumptionKg, intakeG, ageInDays };
+}
