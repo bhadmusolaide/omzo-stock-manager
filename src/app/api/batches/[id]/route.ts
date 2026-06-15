@@ -113,12 +113,12 @@ export async function PATCH(
     // Handle current_live updates carefully to preserve processing deductions
     let current_live: number | undefined;
 
-    // If totalMortality is being updated, recalculate current_live to account for the change
-    if (validatedData.totalMortality !== undefined && validatedData.totalMortality !== existingBatch.total_mortality) {
+    // If totalMortality is being updated (even if same value, to ensure recalculation)
+    if (validatedData.totalMortality !== undefined) {
       const initialCount = initial_chick_count ?? (existingBatch.initial_chick_count || 0);
       current_live = Math.max(0, initialCount - validatedData.totalMortality - totalProcessed);
     }
-    // If currentLive is explicitly provided and mortality wasn't changed, use it
+    // If currentLive is explicitly provided and mortality wasn't provided, use it
     else if (validatedData.currentLive !== undefined) {
       current_live = validatedData.currentLive;
     }
@@ -138,7 +138,6 @@ export async function PATCH(
     if (initial_chick_count !== undefined) updatePayload.initial_chick_count = initial_chick_count;
     if (effective_unit_cost !== undefined) updatePayload.effective_unit_cost = effective_unit_cost;
     if (validatedData.status !== undefined) updatePayload.status = validatedData.status;
-    if (validatedData.currentLive !== undefined) updatePayload.current_live = validatedData.currentLive;
     if (current_live !== undefined) updatePayload.current_live = current_live;
     if (validatedData.totalMortality !== undefined) updatePayload.total_mortality = validatedData.totalMortality;
     if (validatedData.totalWeightKg !== undefined) updatePayload.total_weight_kg = validatedData.totalWeightKg;

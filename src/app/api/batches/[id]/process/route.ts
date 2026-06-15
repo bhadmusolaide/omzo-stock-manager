@@ -55,7 +55,9 @@ export async function POST(
 
     const currentLive = batch.current_live || 0;
     if (validatedData.liveBirdsProcessed > currentLive) {
-      return NextResponse.json({ error: 'Cannot process more birds than available' }, { status: 400 });
+      return NextResponse.json({ 
+        error: `Cannot process more birds than available. Current live birds: ${currentLive}, Attempting to process: ${validatedData.liveBirdsProcessed}` 
+      }, { status: 400 });
     }
 
     // Calculate total_batch_cost
