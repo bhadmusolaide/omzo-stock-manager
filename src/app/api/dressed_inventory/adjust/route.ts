@@ -17,12 +17,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClientServiceRole();
 
-    // Find existing inventory entry (latest or matching batch)
     let query = supabase
       .from('dressed_inventory')
       .select('*')
       .eq('product_type', validatedData.productType)
-      .eq('is_deleted', false)  // Assuming soft delete if needed
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -39,7 +38,10 @@ export async function POST(request: NextRequest) {
 
     const { data: existingInventory, error: fetchError } = await query.maybeSingle();
 
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('Error fetching inventory for adjustment:', fetchError);
+      throw fetchError;
+    }
 
     let inventoryId: string | null = null;
     let newAvailableCount = 0;
@@ -47,15 +49,20 @@ export async function POST(request: NextRequest) {
 
     if (existingInventory) {
       inventoryId = existingInventory.id;
-      newAvailableCount = (existingInventory.available_count || 0) + (validatedData.adjustmentCount || 0);
-      newAvailableWeightKg = (existingInventory.available_weight_kg || 0) + (validatedData.adjustmentWeightKg || 0);
+      const currentCount = existingInventory.available_count || 0;
+      const currentWeight = existingInventory.available_weight_kg || 0;
+      const adjustCount = validatedData.adjustmentCount || 0;
+      const adjustWeight = validatedData.adjustmentWeightKg || 0;
 
-      // Prevent negative inventory
+      newAvailableCount = currentCount + adjustCount;
+      newAvailableWeightKg = currentWeight + adjustWeight;
+
       if (newAvailableCount < 0 || newAvailableWeightKg < 0) {
-        return NextResponse.json({ error: 'Inventory cannot go negative' }, { status: 400 });
+        return NextResponse.json({
+          error: `Inventory cannot go negative. Current count: ${currentCount}, adjustment: ${adjustCount}, result: ${newAvailableCount}. Current weight: ${currentWeight}, adjustment: ${adjustWeight}, result: ${newAvailableWeightKg}`,
+        }, { status: 400 });
       }
 
-      // Update existing
       const { error: updateError } = await supabase
         .from('dressed_inventory')
         .update({
@@ -67,7 +74,6 @@ export async function POST(request: NextRequest) {
 
       if (updateError) throw updateError;
     } else {
-      // Create new if no existing
       newAvailableCount = validatedData.adjustmentCount || 0;
       newAvailableWeightKg = validatedData.adjustmentWeightKg || 0;
 
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest) {
         batch_id: validatedData.batchId || null,
         available_count: newAvailableCount,
         available_weight_kg: newAvailableWeightKg,
-        unit_price: 0,  // Default, can be set separately
+        unit_price: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -95,7 +101,6 @@ export async function POST(request: NextRequest) {
       inventoryId = newInventory.id;
     }
 
-    // Fetch the updated inventory
     const { data: updatedInventory, error: finalError } = await supabase
       .from('dressed_inventory')
       .select('*')
@@ -104,7 +109,6 @@ export async function POST(request: NextRequest) {
 
     if (finalError) throw finalError;
 
-    // Transform to camelCase
     const transformedInventory = {
       id: updatedInventory.id,
       productType: updatedInventory.product_type,
@@ -116,10 +120,8 @@ export async function POST(request: NextRequest) {
       updatedAt: updatedInventory.updated_at,
     };
 
-    // Check if batch should be closed (zero live birds AND zero dressed inventory)
     if (updatedInventory.batch_id) {
       const batchId = updatedInventory.batch_id;
-      // Get current live birds
       const { data: batchData } = await supabase
         .from('batches')
         .select('current_live, status')
@@ -129,7 +131,6 @@ export async function POST(request: NextRequest) {
       if (batchData && batchData.status !== 'CLOSED') {
         const currentLive = batchData.current_live || 0;
 
-        // Get dressed inventory
         const { data: dressedInventory } = await supabase
           .from('dressed_inventory')
           .select('available_count, available_weight_kg')
@@ -140,7 +141,6 @@ export async function POST(request: NextRequest) {
         const totalDressedWeight = dressedInventory?.reduce((sum, item) => sum + (item.available_weight_kg || 0), 0) || 0;
 
         if (currentLive <= 0 && totalDressedCount <= 0 && totalDressedWeight <= 0) {
-          // Mark batch as CLOSED
           await supabase
             .from('batches')
             .update({

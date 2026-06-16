@@ -60,6 +60,27 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // Optimistic lock: atomically decrement current_live only if it hasn't changed
+    const newCurrentLive = currentLive - validatedData.liveBirdsProcessed;
+    const { data: lockResult, error: lockError } = await supabase
+      .from('batches')
+      .update({
+        current_live: newCurrentLive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('current_live', currentLive)
+      .select('id');
+
+    if (lockError) throw lockError;
+
+    // If no rows updated, another request already modified current_live (race condition)
+    if (!lockResult || lockResult.length === 0) {
+      return NextResponse.json({
+        error: 'This batch is currently being processed by another request. Please try again.',
+      }, { status: 409 });
+    }
+
     // Calculate total_batch_cost
     const docCost = batch.total_doc_cost || 0;
     const feedCost = (batch.feed_purchases || []).reduce((sum: number, fp: any) => sum + (fp.total_cost || 0), 0);
@@ -153,18 +174,6 @@ export async function POST(
       .select();
 
     if (outputsError) throw outputsError;
-
-    // Update batch current_live
-    const newCurrentLive = currentLive - validatedData.liveBirdsProcessed;
-    const { error: batchUpdateError } = await supabase
-      .from('batches')
-      .update({
-        current_live: newCurrentLive,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    if (batchUpdateError) throw batchUpdateError;
 
     // Update or create dressed_inventory entries
     for (const item of validatedData.yieldMap) {

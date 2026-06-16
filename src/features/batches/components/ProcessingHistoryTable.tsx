@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Table from '@/components/ui/Table';
 import Loading from '@/components/ui/Loading';
-import { createSupabaseClient } from '@/lib/supabase';
 
 interface ProcessingHistoryTableProps {
   batchId?: string | null;
@@ -16,30 +15,23 @@ export default function ProcessingHistoryTable({ batchId }: ProcessingHistoryTab
   useEffect(() => {
     async function fetchHistory() {
       setLoading(true);
-      const supabase = createSupabaseClient();
-      
-      let query = supabase
-        .from('processing_events')
-        .select(`
-          *,
-          batches(name),
-          processing_outputs(*)
-        `)
-        .order('created_at', { ascending: false });
-        
-      if (batchId) {
-        query = query.eq('batch_id', batchId);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
+      try {
+        const params = new URLSearchParams();
+        if (batchId) {
+          params.set('batchId', batchId);
+        }
+        const response = await fetch(`/api/processing-events?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          setHistory(data || []);
+        } else {
+          console.error('Failed to fetch processing history');
+        }
+      } catch (error) {
         console.error('Error fetching processing history:', error);
-      } else {
-        setHistory(data || []);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     }
     
     fetchHistory();

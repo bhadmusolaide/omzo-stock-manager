@@ -170,7 +170,11 @@ export default function ProcessingModal({
     });
   }, [watchedLiveBirds, watchedAvgLiveWeight, watchedYieldMap, allocationMode, totalBatchCost, survivingBirds, lastAvgWeightKg, setValue, productTypes]);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const onSubmit = async (data: ProcessingFormData) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const response = await fetch(`/api/batches/${batchId}/process`, {
         method: 'POST',
@@ -178,8 +182,8 @@ export default function ProcessingModal({
         body: JSON.stringify(data),
       });
       if (response.ok) {
-        // Invalidate batches query cache to refresh live counts
         queryClient.invalidateQueries({ queryKey: ['batches'] });
+        queryClient.invalidateQueries({ queryKey: ['processing-events'] });
         onClose();
         onSuccess();
       } else {
@@ -188,6 +192,8 @@ export default function ProcessingModal({
       }
     } catch (error) {
       console.error('Error processing batch:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -299,7 +305,9 @@ export default function ProcessingModal({
 
         <div className="flex justify-end space-x-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={watchedYieldMap.length === 0}>Process Batch</Button>
+          <Button type="submit" disabled={watchedYieldMap.length === 0 || isSubmitting}>
+            {isSubmitting ? 'Processing...' : 'Process Batch'}
+          </Button>
         </div>
       </form>
     </Modal>

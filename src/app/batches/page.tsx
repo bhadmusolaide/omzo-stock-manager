@@ -16,7 +16,6 @@ import { useBatches, useDeleteBatch } from "@/features/batches/hooks/useBatches"
 import { useUiStore } from "@/store/ui";
 import { toast } from "@/store/toast";
 import { RefreshCw } from "lucide-react";
-import { createSupabaseClient } from '@/lib/supabase';
 
 interface Batch {
   id: string;
@@ -111,12 +110,9 @@ export default function Batches() {
   const { data: processingData } = useQuery({
     queryKey: ['processing-events'],
     queryFn: async () => {
-      const supabase = createSupabaseClient();
-      const { data, error } = await supabase
-        .from('processing_events')
-        .select('live_birds_processed');
-      if (error) throw error;
-      return data;
+      const response = await fetch('/api/processing-events');
+      if (!response.ok) throw new Error('Failed to fetch processing events');
+      return response.json();
     },
   });
 
