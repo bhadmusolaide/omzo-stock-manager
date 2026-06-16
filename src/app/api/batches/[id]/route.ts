@@ -113,17 +113,15 @@ export async function PATCH(
     // Handle current_live updates carefully to preserve processing deductions
     let current_live: number | undefined;
 
-    // If totalMortality is being updated (even if same value, to ensure recalculation)
-    if (validatedData.totalMortality !== undefined) {
+    if (validatedData.currentLive !== undefined) {
+      // Explicit currentLive always takes priority — user is manually correcting the value
+      current_live = validatedData.currentLive;
+    } else if (validatedData.totalMortality !== undefined) {
+      // Auto-calculate only when currentLive is NOT explicitly provided
       const initialCount = initial_chick_count ?? (existingBatch.initial_chick_count || 0);
       current_live = Math.max(0, initialCount - validatedData.totalMortality - totalProcessed);
-    }
-    // If currentLive is explicitly provided and mortality wasn't provided, use it
-    else if (validatedData.currentLive !== undefined) {
-      current_live = validatedData.currentLive;
-    }
-    // Otherwise, preserve the existing current_live value
-    else {
+    } else {
+      // Preserve the existing current_live value
       current_live = existingBatch.current_live || 0;
     }
 
