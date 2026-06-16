@@ -102,8 +102,7 @@ export async function GET(request: Request) {
     const totalEstDailyFeedKg = filteredBatches
       .filter((b: any) => b.status !== 'CLOSED')
       .reduce((sum: number, b: any) => {
-        const totalChicks = (b.doc_purchased_count || 0) + (b.doc_free_count || 0);
-        const currentLive = Math.max(0, totalChicks - (b.total_mortality || 0));
+        const currentLive = b.current_live || 0;
 
         const consumption = getEstimatedDailyFeedConsumption({
           currentLive,
