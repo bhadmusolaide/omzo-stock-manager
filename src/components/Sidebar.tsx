@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
@@ -9,7 +10,6 @@ import {
   Package,
   Settings,
   TrendingUp,
-  Zap,
   ChevronLeft,
   ChevronRight,
   Boxes,
@@ -57,9 +57,7 @@ const Sidebar = () => {
                 transition={{ duration: 0.2 }}
               >
                 <Link href="/" className="flex items-center gap-3">
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <Zap size={24} />
-                  </div>
+                  <Image src="/omzo-logo.png" alt="Omzo Farmz Logo" width={48} height={48} className="rounded-lg" />
                   <div>
                     <h1 className="text-lg font-bold text-gray-900 dark:text-white">Omzo Farmz</h1>
                     <p className="text-xs text-gray-600 dark:text-slate-400">Order and Stock Manager</p>
@@ -70,9 +68,7 @@ const Sidebar = () => {
           </AnimatePresence>
           {isCollapsed && (
             <div className="flex justify-center">
-              <div className="p-2 bg-green-500 rounded-lg">
-                <Zap size={24} />
-              </div>
+              <Image src="/omzo-logo.png" alt="Omzo Farmz Logo" width={40} height={40} className="rounded-lg" />
             </div>
           )}
         </div>

@@ -301,8 +301,8 @@ export default function Feed() {
          {feedPurchases && feedPurchases.length > 0 && (
            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6">
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
-               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Feed</div>
-               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalFeedKg.toFixed(1)} kg</div>
+                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Feed</div>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalFeedKg.toFixed(1)} kg <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({(totalFeedKg / 25).toFixed(1)} bags)</span></div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Cost</div>
@@ -317,8 +317,8 @@ export default function Feed() {
                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{feedTypes.length}</div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
-               <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Remaining Feeds (KG)</div>
-               <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{remainingFeeds.toFixed(1)} kg</div>
+                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Remaining Feeds (KG)</div>
+                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{remainingFeeds.toFixed(1)} kg <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({(remainingFeeds / 25).toFixed(1)} bags)</span></div>
              </div>
            </div>
          )}
