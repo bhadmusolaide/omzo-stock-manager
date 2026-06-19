@@ -379,6 +379,8 @@ export default function Orders() {
             <Table
               columns={columns}
               data={orders}
+              configurable
+              tableId="orders-main"
               pagination={{
                 currentPage: pagination.currentPage,
                 totalPages: pagination.totalPages,
@@ -404,7 +406,7 @@ export default function Orders() {
           </div>
 
           <div className="bg-white dark:bg-slate-700 shadow rounded-lg p-4 transition-colors duration-300">
-            <Table columns={customerColumns} data={customers} />
+            <Table columns={customerColumns} data={customers} configurable tableId="orders-customers" />
           </div>
         </TabsContent>
       </Tabs>

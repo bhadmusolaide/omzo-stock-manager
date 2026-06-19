@@ -260,6 +260,8 @@ export default function Batches() {
           <Table
             columns={columns}
             data={batches || []}
+            configurable
+            tableId="batches-main"
             pagination={{
               currentPage: pagination.currentPage,
               totalPages: pagination.totalPages,

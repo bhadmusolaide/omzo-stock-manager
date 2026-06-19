@@ -334,6 +334,8 @@ export default function DressedInventoryPage() {
               <Table
                 columns={columns.filter(c => c.key !== 'batchName')}
                 data={items}
+                configurable
+                tableId={`dressed-inventory-${batchName}`}
               />
             </div>
           </div>

@@ -129,7 +129,7 @@ export default function ProcessingHistoryTable({ batchId }: ProcessingHistoryTab
 
   return (
     <div className="overflow-auto bg-white dark:bg-slate-800 rounded shadow-sm">
-      <Table columns={columns} data={history} />
+      <Table columns={columns} data={history} configurable tableId="processing-history" />
       <ConfirmModal
         isOpen={!!confirmDeleteId}
         title="Delete Processing Event"

@@ -36,6 +36,29 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Deduplication safety net: soft-delete orphaned NULL-batch_id rows
+    // when the same product_type already has an assigned entry
+    if (inventory && inventory.length > 0) {
+      const assignedProductTypes = new Set(
+        inventory.filter((item: any) => item.batch_id != null).map((item: any) => item.product_type)
+      );
+      const orphanedIds = inventory
+        .filter((item: any) => item.batch_id == null && assignedProductTypes.has(item.product_type))
+        .map((item: any) => item.id);
+
+      if (orphanedIds.length > 0) {
+        await supabase
+          .from('dressed_inventory')
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .in('id', orphanedIds);
+
+        // Filter out soft-deleted duplicates from the current response
+        const cleaned = inventory.filter((item: any) => !orphanedIds.includes(item.id));
+        (inventory as any[]).length = 0;
+        (inventory as any[]).push(...cleaned);
+      }
+    }
+
     // Fetch batch data for summaries separately to avoid grouping issues
     const batchSummaries: Record<string, any> = {};
     if (inventory && inventory.length > 0) {

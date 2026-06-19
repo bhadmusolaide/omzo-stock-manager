@@ -121,7 +121,7 @@ export default function ProcessingModal({
       } catch (error) {
         console.error('Error fetching product types:', error);
         // Fallback to hardcoded values if API fails
-        setProductTypes(['whole', 'quarter', 'dogfood_combo', 'gizzards', 'liver', 'hearts', 'feet']);
+        setProductTypes(['whole', 'quarter', 'Dog Food (Liver, Head, etc)', 'gizzards', 'liver', 'hearts', 'feet']);
       }
     };
 

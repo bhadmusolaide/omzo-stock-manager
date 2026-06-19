@@ -367,6 +367,8 @@ export default function Feed() {
             <Table
               columns={columns}
               data={feedPurchases || []}
+              configurable
+              tableId="feed-purchases"
               pagination={{
                 currentPage: pagination.currentPage,
                 totalPages: pagination.totalPages,

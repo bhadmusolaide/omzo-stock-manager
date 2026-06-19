@@ -173,7 +173,7 @@ export default function Home() {
           </div>
         ) : recentTransactions.length > 0 ? (
           <div className="overflow-x-auto">
-            <Table columns={transactionColumns} data={recentTransactions} />
+            <Table columns={transactionColumns} data={recentTransactions} configurable tableId="dashboard-transactions" />
           </div>
         ) : (
           <p className="text-gray-500 dark:text-gray-400">No recent transactions.</p>

@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       .from('dressed_inventory')
       .select('*')
       .eq('product_type', validatedData.productType)
+      .is('batch_id', null)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -99,6 +100,23 @@ export async function POST(request: NextRequest) {
 
       if (insertError) throw insertError;
       inventoryId = newInventory.id;
+    }
+
+    // Cleanup: when an assigned entry exists, soft-delete any orphaned NULL-batch_id rows for same product_type
+    if (validatedData.batchId) {
+      const { data: orphaned } = await supabase
+        .from('dressed_inventory')
+        .select('id')
+        .eq('product_type', validatedData.productType)
+        .is('batch_id', null)
+        .eq('is_deleted', false);
+
+      if (orphaned && orphaned.length > 0) {
+        await supabase
+          .from('dressed_inventory')
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .in('id', orphaned.map((r: { id: string }) => r.id));
+      }
     }
 
     const { data: updatedInventory, error: finalError } = await supabase

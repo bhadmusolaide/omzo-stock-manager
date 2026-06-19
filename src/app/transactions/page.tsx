@@ -232,6 +232,8 @@ export default function Transactions() {
            <Table
              columns={columns}
              data={transactions || []}
+             configurable
+             tableId="transactions-main"
              pagination={{
                currentPage: pagination.currentPage,
                totalPages: pagination.totalPages,

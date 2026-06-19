@@ -219,6 +219,24 @@ export async function POST(
       }
     }
 
+    // Cleanup: soft-delete orphaned NULL-batch_id rows for product types processed in this batch
+    const processedProductTypes = validatedData.yieldMap.map((item: any) => item.productType);
+    if (processedProductTypes.length > 0) {
+      const { data: orphaned } = await supabase
+        .from('dressed_inventory')
+        .select('id')
+        .in('product_type', processedProductTypes)
+        .is('batch_id', null)
+        .eq('is_deleted', false);
+
+      if (orphaned && orphaned.length > 0) {
+        await supabase
+          .from('dressed_inventory')
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .in('id', orphaned.map((r: { id: string }) => r.id));
+      }
+    }
+
     // Transform response
     const transformedEvent = {
       id: processingEvent.id,
