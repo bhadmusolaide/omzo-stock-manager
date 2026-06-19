@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import Table from "@/components/ui/Table";
 import Button from "@/components/ui/Button";
 import BatchStatusBadge from "@/components/ui/BatchStatusBadge";
@@ -42,6 +43,7 @@ export default function Batches() {
     deleteBatchId,
     setDeleteBatch
   } = useUiStore();
+  const router = useRouter();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -77,10 +79,18 @@ export default function Batches() {
     {
       key: "actions",
       header: "Actions",
-      width: "140px",
-      minWidth: "140px",
+      width: "220px",
+      minWidth: "220px",
       render: (_: unknown, row: Batch) => (
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => router.push(`/batches/${row.id}`)}
+            className="flex-1 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-300 dark:hover:border-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors duration-300"
+          >
+            Track
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -116,13 +126,13 @@ export default function Batches() {
     },
   });
 
-  // Calculate summary metrics
-  const totalBatches = batches.length;
-  const activeBatches = batches.filter((b: Batch) => b.status !== 'CLOSED').length;
-  const totalBirds = batches.reduce((sum: number, b: Batch) => sum + (b.docPurchasedCount + b.docFreeCount), 0);
-  const totalMortality = batches.reduce((sum: number, b: Batch) => sum + b.totalMortality, 0);
+  // Use aggregate totals from API (all pages)
+  const totalBatches = batchesData?.totalBatches ?? batches.length;
+  const activeBatches = batchesData?.activeBatches ?? batches.filter((b: Batch) => b.status !== 'CLOSED').length;
+  const totalBirds = batchesData?.totalBirds ?? batches.reduce((sum: number, b: Batch) => sum + (b.docPurchasedCount + b.docFreeCount), 0);
+  const totalMortality = batchesData?.totalMortality ?? batches.reduce((sum: number, b: Batch) => sum + b.totalMortality, 0);
   const totalProcessed = processingData?.reduce((sum: number, p: { live_birds_processed: number }) => sum + p.live_birds_processed, 0) || 0;
-  const remainingBirds = batches
+  const remainingBirds = batchesData?.remainingBirds ?? batches
     .filter((b: Batch) => b.status !== 'CLOSED')
     .reduce((sum: number, b: Batch) => sum + b.currentLive, 0);
 
@@ -167,6 +177,10 @@ export default function Batches() {
 
   const handlePageChange = (page: number) => {
     setPagination(prev => ({ ...prev, page, currentPage: page }));
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPagination(prev => ({ ...prev, limit: size, itemsPerPage: size, page: 1, currentPage: 1 }));
   };
 
   const handleDeleteCancel = () => {
@@ -230,9 +244,9 @@ export default function Batches() {
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Processing</div>
-               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                 {batches.filter((b: Batch) => b.status === 'PROCESSING').length}
-               </div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                  {batchesData?.processingBatches ?? batches.filter((b: Batch) => b.status === 'PROCESSING').length}
+                </div>
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Processed Birds</div>
@@ -244,9 +258,9 @@ export default function Batches() {
              </div>
              <div className="bg-white dark:bg-slate-700 p-4 rounded-lg border border-gray-200 dark:border-slate-600 shadow-sm dark:shadow-none transition-colors duration-300">
                <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Closed Batches</div>
-               <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
-                 {batches.filter((b: Batch) => b.status === 'CLOSED').length}
-               </div>
+                <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
+                  {batchesData?.closedBatches ?? batches.filter((b: Batch) => b.status === 'CLOSED').length}
+                </div>
              </div>
            </div>
          )}
@@ -268,6 +282,7 @@ export default function Batches() {
               totalItems: pagination.totalItems,
               itemsPerPage: pagination.itemsPerPage,
               onPageChange: handlePageChange,
+              onPageSizeChange: handlePageSizeChange,
             }}
           />
         </div>

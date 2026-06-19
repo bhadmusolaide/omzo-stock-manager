@@ -42,6 +42,27 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Fetch aggregate totals across ALL purchases (not just the paginated page)
+    let aggregateQuery = supabase
+      .from('feed_purchases')
+      .select('kg, total_cost', { count: 'exact' });
+
+    if (batchId) {
+      aggregateQuery = aggregateQuery.eq('batch_id', batchId);
+    }
+
+    const { data: allPurchases } = await aggregateQuery;
+
+    const totalKg = allPurchases?.reduce((sum: number, p: any) => sum + (p.kg || 0), 0) || 0;
+    const totalCost = allPurchases?.reduce((sum: number, p: any) => sum + (p.total_cost || 0), 0) || 0;
+
+    // Fetch distinct feed types across ALL purchases
+    const { data: allTypes } = await supabase
+      .from('feed_purchases')
+      .select('feed_type')
+      .eq('is_deleted', false);
+    const feedTypes = [...new Set(allTypes?.map((p: any) => p.feed_type).filter(Boolean) || [])];
+
     const totalItems = count || 0;
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -51,6 +72,9 @@ export async function GET(request: NextRequest) {
       totalPages,
       totalItems,
       itemsPerPage: limit,
+      totalKg,
+      totalCost,
+      feedTypes,
     });
   } catch (error) {
     console.error('Error fetching feed purchases:', error);

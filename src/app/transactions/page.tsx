@@ -78,6 +78,11 @@ export default function Transactions() {
     setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setFilters(prev => ({ ...prev, limit: size, page: 1 }));
+    setPagination(prev => ({ ...prev, itemsPerPage: size, currentPage: 1 }));
+  };
+
 
   const columns = [
     {
@@ -114,8 +119,8 @@ export default function Transactions() {
     { key: "batch.name", header: "Batch", minWidth: "120px" },
     { key: "order.customerName", header: "Order", minWidth: "120px" },
   ];
-  const totalIncome = transactions?.filter((t: Transaction) => t.type === 'CREDIT').reduce((sum: number, t: Transaction) => sum + t.amount, 0) || 0;
-  const totalExpenses = transactions?.filter((t: Transaction) => t.type === 'DEBIT').reduce((sum: number, t: Transaction) => sum + t.amount, 0) || 0;
+  const totalIncome = transactionsData?.totalIncome ?? (transactions?.filter((t: Transaction) => t.type === 'CREDIT').reduce((sum: number, t: Transaction) => sum + t.amount, 0) || 0);
+  const totalExpenses = transactionsData?.totalExpenses ?? (transactions?.filter((t: Transaction) => t.type === 'DEBIT').reduce((sum: number, t: Transaction) => sum + t.amount, 0) || 0);
   const netProfit = totalIncome - totalExpenses;
 
   if (isLoading) {
@@ -240,6 +245,7 @@ export default function Transactions() {
                totalItems: pagination.totalItems,
                itemsPerPage: pagination.itemsPerPage,
                onPageChange: handlePageChange,
+               onPageSizeChange: handlePageSizeChange,
              }}
            />
          </div>

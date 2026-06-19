@@ -50,6 +50,12 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [batches, setBatches] = useState<{ id: string; name: string }[]>([]);
   const [activeTab, setActiveTab] = useState('orders');
+  const [aggregates, setAggregates] = useState({
+    totalRevenue: 0,
+    totalOutstanding: 0,
+    totalOrderAmount: 0,
+    customers: [] as any[],
+  });
   const {
     addOrderOpen,
     setAddOrderOpen,
@@ -76,7 +82,7 @@ export default function Orders() {
 
   const deleteOrderMutation = useDeleteOrder();
 
-  const fetchOrders = async (page = 1) => {
+  const fetchOrders = async (page = 1, limit?: number) => {
     try {
       const params = new URLSearchParams();
       if (filters.status) params.append('status', filters.status);
@@ -84,12 +90,18 @@ export default function Orders() {
       if (filters.search) params.append('search', filters.search);
       if (filters.orderType) params.append('orderType', filters.orderType);
       params.append('page', page.toString());
-      params.append('limit', pagination.itemsPerPage.toString());
+      params.append('limit', (limit ?? pagination.itemsPerPage).toString());
 
       const response = await fetch(`/api/orders?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setOrders(data.orders || data);
+        setAggregates({
+          totalRevenue: data.totalRevenue ?? 0,
+          totalOutstanding: data.totalOutstanding ?? 0,
+          totalOrderAmount: data.totalOrderAmount ?? 0,
+          customers: data.customers ?? [],
+        });
         setPagination(prev => ({
           ...prev,
           currentPage: data.currentPage || page,
@@ -149,13 +161,18 @@ export default function Orders() {
     fetchOrders(page);
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setPagination(prev => ({ ...prev, itemsPerPage: size }));
+    fetchOrders(1, size);
+  };
+
   const handleDeleteCancel = () => {
     setDeleteOrder(false, null);
   };
 
-  const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.amountPaid) || 0), 0);
-  const totalOutstanding = orders.reduce((sum, order) => sum + ((Number(order.totalAmount) || 0) - (Number(order.amountPaid) || 0)), 0);
-  const totalOrderAmount = orders.reduce((sum, order) => sum + (Number(order.totalAmount) || 0), 0);
+  const totalRevenue = aggregates.totalRevenue;
+  const totalOutstanding = aggregates.totalOutstanding;
+  const totalOrderAmount = aggregates.totalOrderAmount;
 
   const columns = [
     { key: "orderNumber", header: "Order No", minWidth: "100px", maxWidth: "120px", truncate: true, render: (value: string | null) => value || 'N/A' },
@@ -246,38 +263,10 @@ export default function Orders() {
     );
   }
 
-  // Compute customer metrics
-  const customerMetrics = orders.reduce((acc, order) => {
-    const customerName = order.customerName || 'Unknown';
-    if (!acc[customerName]) {
-      acc[customerName] = {
-        name: customerName,
-        phone: order.customerPhone || null,
-        totalOrders: 0,
-        ltv: 0,
-        avgOrderValue: 0,
-        lastOrderDate: null,
-        orders: []
-      };
-    }
-    acc[customerName].totalOrders += 1;
-    acc[customerName].ltv += Number(order.amountPaid || 0);
-    acc[customerName].orders.push(order);
-    const orderDate = order.orderDate ? new Date(order.orderDate) : null;
-    if (!acc[customerName].lastOrderDate || (orderDate && orderDate > new Date(acc[customerName].lastOrderDate))) {
-      acc[customerName].lastOrderDate = order.orderDate;
-      acc[customerName].phone = order.customerPhone || acc[customerName].phone;
-    }
-    return acc;
-  }, {} as Record<string, any>);
-
-  const customers = Object.values(customerMetrics);
-  customers.forEach(customer => {
-    customer.avgOrderValue = customer.totalOrders > 0 ? customer.ltv / customer.totalOrders : 0;
-  });
-
+  // Use aggregate customer metrics from API
+  const customers = aggregates.customers;
   const totalCustomers = customers.length;
-  const totalLTV = customers.reduce((sum, customer) => sum + customer.ltv, 0);
+  const totalLTV = customers.reduce((sum: number, customer: any) => sum + (customer.ltv || 0), 0);
 
   const customerColumns = [
     { key: "name", header: "Customer Name" },
@@ -387,6 +376,7 @@ export default function Orders() {
                 totalItems: pagination.totalItems,
                 itemsPerPage: pagination.itemsPerPage,
                 onPageChange: handlePageChange,
+                onPageSizeChange: handlePageSizeChange,
               }}
             />
           </div>

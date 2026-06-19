@@ -213,6 +213,11 @@ export default function Feed() {
     setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
+  const handlePageSizeChange = (size: number) => {
+    setFilters(prev => ({ ...prev, limit: size, page: 1 }));
+    setPagination(prev => ({ ...prev, itemsPerPage: size, currentPage: 1 }));
+  };
+
   if (isLoading) {
     return <Loading text="Loading feed purchases..." className="p-6" />;
   }
@@ -221,11 +226,11 @@ export default function Feed() {
     return <div className="p-6">Error loading feed purchases</div>;
   }
 
-  // Calculate feed metrics
-  const totalFeedKg = feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.kg || 0), 0) || 0;
-  const totalFeedCost = feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.total_cost || 0), 0) || 0;
+  // Calculate feed metrics — use aggregate totals from API (all pages), not just the current page
+  const totalFeedKg = feedPurchasesData?.totalKg ?? (feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.kg || 0), 0) || 0);
+  const totalFeedCost = feedPurchasesData?.totalCost ?? (feedPurchases?.reduce((sum: number, purchase: FeedPurchase) => sum + (purchase.total_cost || 0), 0) || 0);
   const avgCostPerKg = totalFeedKg > 0 ? totalFeedCost / totalFeedKg : 0;
-  const feedTypes = [...new Set(feedPurchases?.map((p: FeedPurchase) => p.feed_type).filter(Boolean) || [])];
+  const feedTypes = feedPurchasesData?.feedTypes ?? [...new Set(feedPurchases?.map((p: FeedPurchase) => p.feed_type).filter(Boolean) || [])];
   const remainingFeeds = filters.batchId ? batchRemaining : Math.max(0, totalFeedKg - totalUsed);
 
   return (
@@ -375,6 +380,7 @@ export default function Feed() {
                 totalItems: pagination.totalItems,
                 itemsPerPage: pagination.itemsPerPage,
                 onPageChange: handlePageChange,
+                onPageSizeChange: handlePageSizeChange,
               }}
             />
           </div>

@@ -97,6 +97,38 @@ export async function GET(request: NextRequest) {
       updatedAt: order.updated_at,
     }));
 
+    // Aggregate totals across ALL orders (not just the paginated page)
+    let aggQuery = supabase
+      .from('orders')
+      .select('total_amount, amount_paid, customer_name, customer_phone', { count: 'exact' });
+
+    if (status) aggQuery = aggQuery.eq('payment_status', status);
+    if (batchId) aggQuery = aggQuery.eq('linked_batch_id', batchId);
+    if (search) aggQuery = aggQuery.ilike('customer_name', `%${search}%`);
+    if (orderType) aggQuery = aggQuery.eq('order_type', orderType);
+
+    const { data: allOrders } = await aggQuery;
+
+    const totalRevenue = allOrders?.reduce((sum: number, o: any) => sum + (Number(o.amount_paid) || 0), 0) || 0;
+    const totalOrderAmount = allOrders?.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0) || 0;
+    const totalOutstanding = totalOrderAmount - totalRevenue;
+
+    // Customer metrics across all orders
+    const customerMetrics: Record<string, any> = {};
+    (allOrders || []).forEach((o: any) => {
+      const name = o.customer_name || 'Unknown';
+      if (!customerMetrics[name]) {
+        customerMetrics[name] = { name, phone: o.customer_phone || null, totalOrders: 0, ltv: 0 };
+      }
+      customerMetrics[name].totalOrders += 1;
+      customerMetrics[name].ltv += Number(o.amount_paid || 0);
+      if (o.customer_phone) customerMetrics[name].phone = o.customer_phone;
+    });
+    const customers = Object.values(customerMetrics);
+    customers.forEach((c: any) => {
+      c.avgOrderValue = c.totalOrders > 0 ? c.ltv / c.totalOrders : 0;
+    });
+
     const totalItems = count || 0;
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -106,6 +138,10 @@ export async function GET(request: NextRequest) {
       totalPages,
       totalItems,
       itemsPerPage: limit,
+      totalRevenue,
+      totalOutstanding,
+      totalOrderAmount,
+      customers,
     });
   } catch (error) {
     console.error('Error fetching orders:', error);

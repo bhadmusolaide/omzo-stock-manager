@@ -22,6 +22,7 @@ interface TableProps {
     totalItems: number;
     itemsPerPage: number;
     onPageChange: (page: number) => void;
+    onPageSizeChange?: (size: number) => void;
   };
 }
 
@@ -310,8 +311,8 @@ const Table: React.FC<TableProps> = ({ columns, data, className = '', configurab
             </button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700 dark:text-slate-300">
+            <div className="flex items-center sm:items-baseline gap-3">
+              <p className="text-sm text-gray-700 dark:text-slate-300 m-0">
                 Showing{' '}
                 <span className="font-medium">
                   {Math.min((pagination.currentPage - 1) * pagination.itemsPerPage + 1, pagination.totalItems)}
@@ -323,6 +324,20 @@ const Table: React.FC<TableProps> = ({ columns, data, className = '', configurab
                 of{' '}
                 <span className="font-medium">{pagination.totalItems}</span> results
               </p>
+              {pagination.onPageSizeChange && (
+                <div className="text-sm text-gray-600 dark:text-slate-400 flex items-center sm:items-baseline gap-1.5">
+                  <span>Show</span>
+                  <select
+                    value={pagination.itemsPerPage}
+                    onChange={(e) => pagination.onPageSizeChange!(Number(e.target.value))}
+                    className="text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div>
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">

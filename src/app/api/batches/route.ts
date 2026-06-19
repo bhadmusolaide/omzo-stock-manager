@@ -112,6 +112,20 @@ export async function GET(request: NextRequest) {
       updatedAt: batch.updated_at,
     }));
 
+    // Aggregate totals across ALL batches (not just the paginated page)
+    const { data: allBatches } = await supabase
+      .from('batches')
+      .select('doc_purchased_count, doc_free_count, current_live, total_mortality, status')
+      .eq('is_deleted', false);
+
+    const totalBatches = allBatches?.length || 0;
+    const activeBatches = allBatches?.filter((b: any) => b.status !== 'CLOSED').length || 0;
+    const totalBirds = allBatches?.reduce((sum: number, b: any) => sum + (b.doc_purchased_count || 0) + (b.doc_free_count || 0), 0) || 0;
+    const totalMortality = allBatches?.reduce((sum: number, b: any) => sum + (b.total_mortality || 0), 0) || 0;
+    const remainingBirds = allBatches?.filter((b: any) => b.status !== 'CLOSED').reduce((sum: number, b: any) => sum + (b.current_live || 0), 0) || 0;
+    const processingBatches = allBatches?.filter((b: any) => b.status === 'PROCESSING').length || 0;
+    const closedBatches = allBatches?.filter((b: any) => b.status === 'CLOSED').length || 0;
+
     const totalItems = count || 0;
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -121,6 +135,13 @@ export async function GET(request: NextRequest) {
       totalPages,
       totalItems,
       itemsPerPage: limit,
+      totalBatches,
+      activeBatches,
+      totalBirds,
+      totalMortality,
+      remainingBirds,
+      processingBatches,
+      closedBatches,
     });
   } catch (error) {
     console.error('Error fetching batches:', error);

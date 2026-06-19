@@ -61,6 +61,22 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Aggregate totals across ALL transactions (not just the paginated page)
+    let aggQuery = supabase
+      .from('transactions')
+      .select('amount, type', { count: 'exact' });
+
+    if (type) aggQuery = aggQuery.eq('type', type);
+    if (category) aggQuery = aggQuery.eq('category', category);
+    if (startDate) aggQuery = aggQuery.gte('date', startDate);
+    if (endDate) aggQuery = aggQuery.lte('date', endDate);
+    if (search) aggQuery = aggQuery.ilike('description', `%${search}%`);
+
+    const { data: allTransactions } = await aggQuery;
+
+    const totalIncome = allTransactions?.filter((t: any) => t.type === 'CREDIT').reduce((sum: number, t: any) => sum + (t.amount || 0), 0) || 0;
+    const totalExpenses = allTransactions?.filter((t: any) => t.type === 'DEBIT').reduce((sum: number, t: any) => sum + (t.amount || 0), 0) || 0;
+
     const totalItems = count || 0;
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -70,6 +86,8 @@ export async function GET(request: NextRequest) {
       totalPages,
       totalItems,
       itemsPerPage: limit,
+      totalIncome,
+      totalExpenses,
     });
   } catch (error) {
     console.error('Error fetching transactions:', error);
