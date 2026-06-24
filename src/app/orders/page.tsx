@@ -11,8 +11,9 @@ import { ConfirmModal } from "@/components/common/ConfirmModal";
 import InsightBadges from "@/components/InsightBadges";
 import { useUiStore } from "@/store/ui";
 import { formatCurrency } from "@/utils/currency";
-import { useDeleteOrder } from "@/hooks/useOrders";
+import { useDeleteOrder, useUpdateOrder } from "@/hooks/useOrders";
 import { toast } from "@/store/toast";
+import { CheckCircle2 } from "lucide-react";
 import { Skeleton } from '@/components/common/Skeleton';
 
 interface Order {
@@ -81,6 +82,7 @@ export default function Orders() {
   });
 
   const deleteOrderMutation = useDeleteOrder();
+  const updateOrderMutation = useUpdateOrder();
 
   const fetchOrders = async (page = 1, limit?: number) => {
     try {
@@ -170,6 +172,23 @@ export default function Orders() {
     setDeleteOrder(false, null);
   };
 
+  const handleMarkAsPaid = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    try {
+      await updateOrderMutation.mutateAsync({
+        id: orderId,
+        data: { amountPaid: order.totalAmount },
+      });
+      toast.success('Payment status updated successfully');
+      fetchOrders(pagination.currentPage);
+    } catch (error) {
+      console.error('Failed to mark as paid:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update payment status';
+      toast.error(errorMessage);
+    }
+  };
+
   const totalRevenue = aggregates.totalRevenue;
   const totalOutstanding = aggregates.totalOutstanding;
   const totalOrderAmount = aggregates.totalOrderAmount;
@@ -220,18 +239,32 @@ export default function Orders() {
     } },
     { key: "location", header: "Location", minWidth: "100px", render: (value: string | null) => value || 'N/A' },
     { key: "insights", header: "Insights", minWidth: "100px", render: (_: unknown, row: Order) => <InsightBadges orderId={row.id} /> },
-    { key: "actions", header: "Actions", minWidth: "140px", render: (_: unknown, row: Order) => (
-      <div className="flex gap-2">
-        <Button size="sm" onClick={() => setEditOrder(true, row.id)}>Edit</Button>
-        <Button
-          size="sm"
-          className="bg-red-600 dark:bg-red-500 text-white hover:bg-red-700 dark:hover:bg-red-600 focus:ring-red-500 dark:focus:ring-red-400 transition-colors duration-300"
-          onClick={() => setDeleteOrder(true, row.id)}
-        >
-          Delete
-        </Button>
-      </div>
-    ) },
+    { key: "actions", header: "Actions", minWidth: "200px", render: (_: unknown, row: Order) => {
+      const status = row.paymentStatus || 'PENDING';
+      const isUnpaid = status === 'PENDING' || status === 'PARTIAL';
+      return (
+        <div className="flex gap-2">
+          {isUnpaid && (
+            <Button
+              size="sm"
+              className="bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600 focus:ring-green-500 dark:focus:ring-green-400 transition-colors duration-300 inline-flex items-center gap-1"
+              onClick={() => handleMarkAsPaid(row.id)}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Mark Paid
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setEditOrder(true, row.id)}>Edit</Button>
+          <Button
+            size="sm"
+            className="bg-red-600 dark:bg-red-500 text-white hover:bg-red-700 dark:hover:bg-red-600 focus:ring-red-500 dark:focus:ring-red-400 transition-colors duration-300"
+            onClick={() => setDeleteOrder(true, row.id)}
+          >
+            Delete
+          </Button>
+        </div>
+      );
+    } },
   ];
   if (loading) {
     return (
