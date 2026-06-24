@@ -16,6 +16,9 @@ const updateOrderSchema = z.object({
     productId: z.string().min(1, 'Product ID is required'),
     qtyCount: z.number().int().min(0),
     qtyWeight: z.number().min(0),
+    damagedQtyCount: z.number().int().min(0).optional().default(0),
+    damagedQtyWeight: z.number().min(0).optional().default(0),
+    damagedReason: z.string().optional(),
     unitPrice: z.number().positive('Unit price must be greater than 0'),
     priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
   })).optional(),
@@ -67,6 +70,9 @@ export async function GET(
         productId: item.product_name,
         qtyCount: item.qty_count || 0,
         qtyWeight: item.qty_weight || 0,
+        damagedQtyCount: item.damaged_qty_count || 0,
+        damagedQtyWeight: item.damaged_qty_weight || 0,
+        damagedReason: item.damaged_reason || '',
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
         itemType: item.item_type || 'DRESSED', // Include item type
@@ -119,9 +125,11 @@ export async function PATCH(
     let newTotalAmount = currentOrder.total_amount;
     if (validatedData.orderItems) {
       newTotalAmount = validatedData.orderItems.reduce((sum, item) => {
-        const subtotal = item.priceMode === 'COUNT' ? item.qtyCount * item.unitPrice :
-                         item.priceMode === 'KG' ? item.qtyWeight * item.unitPrice :
-                         item.qtyWeight * item.unitPrice;
+        const billableCount = Math.max(0, item.qtyCount - (item.damagedQtyCount || 0));
+        const billableWeight = Math.max(0, item.qtyWeight - (item.damagedQtyWeight || 0));
+        const subtotal = item.priceMode === 'COUNT' ? billableCount * item.unitPrice :
+                         item.priceMode === 'KG' ? billableWeight * item.unitPrice :
+                         billableWeight * item.unitPrice;
         return sum + subtotal;
       }, 0);
     }
@@ -178,6 +186,9 @@ export async function PATCH(
         productId: item.product_name,
         qtyCount: item.qty_count || 0,
         qtyWeight: item.qty_weight || 0,
+        damagedQtyCount: item.damaged_qty_count || 0,
+        damagedQtyWeight: item.damaged_qty_weight || 0,
+        damagedReason: item.damaged_reason || '',
         unitPrice: item.unit_price,
         priceMode: item.price_mode,
       }));
@@ -186,6 +197,9 @@ export async function PATCH(
         productId: item.productId,
         qtyCount: item.qtyCount,
         qtyWeight: item.qtyWeight,
+        damagedQtyCount: item.damagedQtyCount || 0,
+        damagedQtyWeight: item.damagedQtyWeight || 0,
+        damagedReason: item.damagedReason || '',
         unitPrice: item.unitPrice,
         priceMode: item.priceMode,
       }));
@@ -409,7 +423,11 @@ export async function PATCH(
       const { error: createError } = await supabase.from('order_items').insert(
         validatedData.orderItems.map(item => {
           const quantity = item.priceMode === 'KG' ? item.qtyWeight : item.qtyCount;
-          const totalPrice = quantity * item.unitPrice;
+          const billableCount = Math.max(0, item.qtyCount - (item.damagedQtyCount || 0));
+          const billableWeight = Math.max(0, item.qtyWeight - (item.damagedQtyWeight || 0));
+          const totalPrice = item.priceMode === 'COUNT' ? billableCount * item.unitPrice :
+                             item.priceMode === 'KG' ? billableWeight * item.unitPrice :
+                             billableWeight * item.unitPrice;
           return {
             order_id: id,
             product_name: item.productId,
@@ -419,6 +437,9 @@ export async function PATCH(
             price_mode: item.priceMode,
             qty_count: item.qtyCount,
             qty_weight: item.qtyWeight,
+            damaged_qty_count: item.damagedQtyCount || 0,
+            damaged_qty_weight: item.damagedQtyWeight || 0,
+            damaged_reason: item.damagedReason || null,
           };
         })
       );
@@ -444,6 +465,36 @@ export async function PATCH(
         if (createTransactionError) {
           console.error('Error creating transaction:', createTransactionError);
           return NextResponse.json({ error: createTransactionError.message }, { status: 500 });
+        }
+      }
+    }
+
+    // Handle Loss transaction
+    if (validatedData.orderItems) {
+      // Delete existing LOSS transactions for this order to prevent duplicates if edited multiple times
+      await supabase.from('transactions').delete().eq('linked_order_id', id).eq('category', 'LOSS');
+
+      const totalLoss = validatedData.orderItems.reduce((sum, item) => {
+        const damagedCount = item.damagedQtyCount || 0;
+        const damagedWeight = item.damagedQtyWeight || 0;
+        const loss = item.priceMode === 'COUNT' ? damagedCount * item.unitPrice :
+                     item.priceMode === 'KG' ? damagedWeight * item.unitPrice :
+                     damagedWeight * item.unitPrice;
+        return sum + loss;
+      }, 0);
+
+      if (totalLoss > 0) {
+        const { error: lossTransactionError } = await supabase.from('transactions').insert({
+          date: new Date().toISOString(),
+          description: `Damage/Loss Write-off for Order: ${(updatedOrderBase as any).order_number} - ${(updatedOrderBase as any).customer_name}`,
+          amount: totalLoss,
+          type: 'DEBIT',
+          category: 'LOSS',
+          linked_order_id: id,
+          linked_batch_id: updatedOrderBase.linked_batch_id,
+        });
+        if (lossTransactionError) {
+          console.error('Error creating loss transaction:', lossTransactionError);
         }
       }
     }

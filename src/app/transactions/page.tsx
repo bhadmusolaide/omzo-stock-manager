@@ -16,7 +16,7 @@ interface Transaction {
   description: string;
   amount: number;
   type: 'CREDIT' | 'DEBIT';
-  category: 'DOC' | 'FEED' | 'ORDER' | 'EXPENSE' | 'OTHER';
+  category: 'DOC' | 'FEED' | 'ORDER' | 'EXPENSE' | 'OTHER' | 'LOSS';
   linkedBatchId?: string;
   linkedOrderId?: string;
   batch?: {
@@ -208,6 +208,7 @@ export default function Transactions() {
               <option value="FEED">Feed</option>
               <option value="ORDER">Order</option>
               <option value="EXPENSE">Expense</option>
+              <option value="LOSS">Loss/Damage</option>
               <option value="OTHER">Other</option>
             </select>
           </div>

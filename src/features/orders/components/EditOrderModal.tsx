@@ -16,6 +16,9 @@ const orderItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   qtyCount: z.number().int().min(0),
   qtyWeight: z.number().min(0),
+  damagedQtyCount: z.number().int().min(0).optional(),
+  damagedQtyWeight: z.number().min(0).optional(),
+  damagedReason: z.string().optional(),
   unitPrice: z.number().positive('Unit price must be greater than 0'),
   priceMode: z.enum(['COUNT', 'KG', 'COUNT_KG']),
 });
@@ -64,6 +67,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const [orderData, setOrderData] = useState<any>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false); // State for showing history
+  const [expandedDamage, setExpandedDamage] = useState<Record<number, boolean>>({}); // State for showing damage fields
   const [orderType, setOrderType] = useState<'DRESSED' | 'LIVE'>('DRESSED'); // Track order type (read-only)
   const [isComplimentary, setIsComplimentary] = useState(false); // Track complimentary status
   const updateOrder = useUpdateOrder();
@@ -79,7 +83,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
-      orderItems: [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }],
+      orderItems: [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, damagedQtyCount: 0, damagedQtyWeight: 0, damagedReason: '', unitPrice: 0, priceMode: 'COUNT' }],
       amountPaid: 0,
       installmentPayment: 0,
     },
@@ -93,9 +97,11 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const orderItems = watch('orderItems') || [];
   const linkedBatchId = watch('linkedBatchId');
   const totalAmount = (orderItems || []).reduce((sum, item) => {
-    const subtotal = item.priceMode === 'COUNT' ? (item.qtyCount || 0) * (item.unitPrice || 0) :
-                      item.priceMode === 'KG' ? (item.qtyWeight || 0) * (item.unitPrice || 0) :
-                      (item.qtyWeight || 0) * (item.unitPrice || 0);
+    const billableCount = Math.max(0, (item.qtyCount || 0) - (item.damagedQtyCount || 0));
+    const billableWeight = Math.max(0, (item.qtyWeight || 0) - (item.damagedQtyWeight || 0));
+    const subtotal = item.priceMode === 'COUNT' ? billableCount * (item.unitPrice || 0) :
+                      item.priceMode === 'KG' ? billableWeight * (item.unitPrice || 0) :
+                      billableWeight * (item.unitPrice || 0);
     return sum + subtotal;
   }, 0);
 
@@ -189,10 +195,13 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
                 productId: item.productId || item.product_name || '',
                 qtyCount: item.qtyCount !== undefined ? item.qtyCount : 0,
                 qtyWeight: item.qtyWeight !== undefined ? item.qtyWeight : 0,
+                damagedQtyCount: item.damagedQtyCount !== undefined ? item.damagedQtyCount : 0,
+                damagedQtyWeight: item.damagedQtyWeight !== undefined ? item.damagedQtyWeight : 0,
+                damagedReason: item.damagedReason || '',
                 unitPrice: item.unitPrice || 0,
                 priceMode: item.priceMode || 'COUNT',
               }))
-            : [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, unitPrice: 0, priceMode: 'COUNT' }];
+            : [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, damagedQtyCount: 0, damagedQtyWeight: 0, damagedReason: '', unitPrice: 0, priceMode: 'COUNT' }];
 
           reset({
             orderNumber: data.orderNumber || '',
@@ -395,16 +404,60 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
                     </select>
                   </div>
                 </div>
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
-                  <p className="text-sm font-semibold">
-                    {formatCurrency(
-                      orderItems[index]?.priceMode === 'COUNT' ? (orderItems[index]?.qtyCount || 0) * (orderItems[index]?.unitPrice || 0) :
-                      orderItems[index]?.priceMode === 'KG' ? (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0) :
-                      (orderItems[index]?.qtyWeight || 0) * (orderItems[index]?.unitPrice || 0)
-                    )}
-                  </p>
+                <div className="mt-2 flex justify-between items-center">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subtotal</label>
+                    <p className="text-sm font-semibold">
+                      {formatCurrency(
+                        orderItems[index]?.priceMode === 'COUNT' ? Math.max(0, (orderItems[index]?.qtyCount || 0) - (orderItems[index]?.damagedQtyCount || 0)) * (orderItems[index]?.unitPrice || 0) :
+                        orderItems[index]?.priceMode === 'KG' ? Math.max(0, (orderItems[index]?.qtyWeight || 0) - (orderItems[index]?.damagedQtyWeight || 0)) * (orderItems[index]?.unitPrice || 0) :
+                        Math.max(0, (orderItems[index]?.qtyWeight || 0) - (orderItems[index]?.damagedQtyWeight || 0)) * (orderItems[index]?.unitPrice || 0)
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    onClick={() => setExpandedDamage(prev => ({ ...prev, [index]: !prev[index] }))}
+                  >
+                    {expandedDamage[index] ? 'Hide Damage/Loss' : 'Report Damage/Loss'}
+                  </Button>
                 </div>
+                {expandedDamage[index] && (
+                  <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded">
+                    <h4 className="text-xs font-semibold text-red-800 dark:text-red-300 mb-2">Damage/Loss Reporting</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Damaged Count</label>
+                        <input
+                          type="number"
+                          {...register(`orderItems.${index}.damagedQtyCount`, { valueAsNumber: true })}
+                          className="w-full px-2 py-1 border border-red-300 rounded text-sm bg-white dark:bg-[#1e293b] text-[#f1f5f9]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Damaged Weight (kg)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          {...register(`orderItems.${index}.damagedQtyWeight`, { valueAsNumber: true })}
+                          className="w-full px-2 py-1 border border-red-300 rounded text-sm bg-white dark:bg-[#1e293b] text-[#f1f5f9]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Reason</label>
+                        <input
+                          type="text"
+                          {...register(`orderItems.${index}.damagedReason`)}
+                          placeholder="e.g., Spoiled"
+                          className="w-full px-2 py-1 border border-red-300 rounded text-sm bg-white dark:bg-[#1e293b] text-[#f1f5f9]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {fields.length > 1 && (
                   <Button
                     type="button"
