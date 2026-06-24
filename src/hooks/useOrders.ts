@@ -62,15 +62,17 @@ export const useUpdateOrder = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: updateOrder,
-    onMutate: async (updatedOrder) => {
+    onMutate: async ({ id, data }) => {
       await queryClient.cancelQueries({ queryKey: ['orders'] });
       const previousOrders = queryClient.getQueryData(['orders']);
       queryClient.setQueryData(['orders'], (old: any) =>
-        (old || []).map((order: any) => order.id === updatedOrder.id ? updatedOrder : order)
+        (old || []).map((order: any) =>
+          order.id === id ? { ...order, ...data } : order
+        )
       );
       return { previousOrders };
     },
-    onError: (err, updatedOrder, context) => {
+    onError: (_err, _vars, context) => {
       queryClient.setQueryData(['orders'], context?.previousOrders);
     },
     onSettled: () => {

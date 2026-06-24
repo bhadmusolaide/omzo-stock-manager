@@ -10,6 +10,7 @@ import Button from '@/components/ui/Button';
 import { useUpdateOrder } from '@/hooks/useOrders';
 import { useOrderHistory } from '@/hooks/useOrderHistory';
 import { formatCurrency } from '@/utils/currency';
+import { toast } from '@/store/toast';
 
 const orderItemSchema = z.object({
   id: z.string().optional(),
@@ -255,11 +256,14 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
       // Remove installmentPayment from payload as it's not stored in the database
       const { installmentPayment, ...finalPayload } = payload;
       await updateOrder.mutateAsync({ id: orderId!, data: finalPayload });
+      toast.success('Order updated successfully');
       reset();
       onClose();
       onSuccess();
     } catch (error) {
       console.error('Error updating order:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update order';
+      toast.error(message);
     }
   };
 
