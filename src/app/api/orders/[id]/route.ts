@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClientServiceRole } from '@/lib/supabase';
 import { z } from 'zod';
+import { formatCurrency } from '@/utils/currency';
 
 const updateOrderSchema = z.object({
   orderNumber: z.string().min(1, 'Order number is required').optional(),
@@ -9,6 +10,7 @@ const updateOrderSchema = z.object({
   orderDate: z.string().refine((date) => !isNaN(Date.parse(date)), 'Invalid date').optional(),
   totalAmount: z.number().min(0, 'Total amount must be non-negative').optional(),
   amountPaid: z.number().min(0, 'Amount paid must be non-negative').optional(),
+  writeOffAmount: z.number().min(0, 'Write-off amount must be non-negative').optional(),
   linkedBatchId: z.string().optional(),
   paymentStatus: z.enum(['PENDING', 'PARTIAL', 'PAID', 'COMPLIMENTARY']).optional(), // Allow explicit payment status
   orderItems: z.array(z.object({
@@ -59,7 +61,8 @@ export async function GET(
       orderDate: order.order_date,
       totalAmount: order.total_amount,
       amountPaid: order.amount_paid,
-      balanceDue: Math.max(0, order.total_amount - order.amount_paid),
+      writeOffAmount: order.write_off_amount || 0,
+      balanceDue: Math.max(0, order.total_amount - order.amount_paid - (order.write_off_amount || 0)),
       paymentStatus: order.payment_status,
       status: order.status,
       orderType: order.order_type || 'DRESSED', // Include order type
@@ -136,16 +139,17 @@ export async function PATCH(
 
     // Calculate payment status (respect explicit COMPLIMENTARY status)
     let paymentStatus = (currentOrder as any).payment_status;
+    const writeOffAmount = validatedData.writeOffAmount ?? (currentOrder as any).write_off_amount ?? 0;
     if (validatedData.paymentStatus === 'COMPLIMENTARY') {
       paymentStatus = 'COMPLIMENTARY';
-    } else if (validatedData.amountPaid !== undefined || newTotalAmount !== currentOrder.total_amount) {
+    } else if (validatedData.amountPaid !== undefined || newTotalAmount !== currentOrder.total_amount || validatedData.writeOffAmount !== undefined) {
       const newAmountPaid = validatedData.amountPaid ?? (currentOrder as any).amount_paid;
-      if (newAmountPaid === 0) {
+      if (newAmountPaid === 0 && writeOffAmount === 0) {
         paymentStatus = 'PENDING';
-      } else if (newAmountPaid < newTotalAmount) {
-        paymentStatus = 'PARTIAL';
-      } else {
+      } else if (newAmountPaid + writeOffAmount >= newTotalAmount) {
         paymentStatus = 'PAID';
+      } else {
+        paymentStatus = 'PARTIAL';
       }
     }
 
@@ -237,8 +241,9 @@ export async function PATCH(
     const updateData: any = {
       total_amount: newTotalAmount,
       amount_paid: validatedData.amountPaid !== undefined ? validatedData.amountPaid : currentOrder.amount_paid,
-      balance_due: Math.max(0, newTotalAmount - (validatedData.amountPaid !== undefined ? validatedData.amountPaid : currentOrder.amount_paid)),
+      balance_due: Math.max(0, newTotalAmount - (validatedData.amountPaid !== undefined ? validatedData.amountPaid : currentOrder.amount_paid) - writeOffAmount),
       payment_status: paymentStatus,
+      write_off_amount: writeOffAmount,
     };
     if (validatedData.orderNumber !== undefined) updateData.order_number = validatedData.orderNumber;
     if (validatedData.customerName !== undefined) updateData.customer_name = validatedData.customerName;
@@ -470,23 +475,29 @@ export async function PATCH(
     }
 
     // Handle Loss transaction
-    if (validatedData.orderItems) {
+    if (validatedData.orderItems || validatedData.writeOffAmount !== undefined) {
       // Delete existing LOSS transactions for this order to prevent duplicates if edited multiple times
       await supabase.from('transactions').delete().eq('linked_order_id', id).eq('category', 'LOSS');
 
-      const totalLoss = validatedData.orderItems.reduce((sum, item) => {
+      const damageLoss = validatedData.orderItems ? validatedData.orderItems.reduce((sum, item) => {
         const damagedCount = item.damagedQtyCount || 0;
         const damagedWeight = item.damagedQtyWeight || 0;
         const loss = item.priceMode === 'COUNT' ? damagedCount * item.unitPrice :
                      item.priceMode === 'KG' ? damagedWeight * item.unitPrice :
                      damagedWeight * item.unitPrice;
         return sum + loss;
-      }, 0);
+      }, 0) : 0;
+
+      const totalLoss = damageLoss + writeOffAmount;
 
       if (totalLoss > 0) {
+        const lossDescriptions: string[] = [];
+        if (damageLoss > 0) lossDescriptions.push(`Damage/Loss: ${formatCurrency(damageLoss)}`);
+        if (writeOffAmount > 0) lossDescriptions.push(`Bad Debt Write-off: ${formatCurrency(writeOffAmount)}`);
+
         const { error: lossTransactionError } = await supabase.from('transactions').insert({
           date: new Date().toISOString(),
-          description: `Damage/Loss Write-off for Order: ${(updatedOrderBase as any).order_number} - ${(updatedOrderBase as any).customer_name}`,
+          description: `Loss Write-off for Order: ${(updatedOrderBase as any).order_number} - ${(updatedOrderBase as any).customer_name} (${lossDescriptions.join(', ')})`,
           amount: totalLoss,
           type: 'DEBIT',
           category: 'LOSS',
@@ -522,7 +533,8 @@ export async function PATCH(
       orderDate: finalOrder.order_date,
       totalAmount: finalOrder.total_amount,
       amountPaid: finalOrder.amount_paid,
-      balanceDue: Math.max(0, finalOrder.total_amount - finalOrder.amount_paid),
+      writeOffAmount: finalOrder.write_off_amount || 0,
+      balanceDue: Math.max(0, finalOrder.total_amount - finalOrder.amount_paid - (finalOrder.write_off_amount || 0)),
       paymentStatus: finalOrder.payment_status,
       status: finalOrder.status,
       orderType: finalOrder.order_type || 'DRESSED', // Include order type

@@ -308,54 +308,63 @@ export interface Database {
           order_number: string
           customer_name: string
           customer_phone: string | null
+          location: string | null
           order_date: string
           total_amount: number
           amount_paid: number
           balance_due: number
+          write_off_amount: number
           payment_status: Database["public"]["Enums"]["payment_status"]
           status: Database["public"]["Enums"]["payment_status"]
-          is_deleted: boolean
+          order_type: Database["public"]["Enums"]["order_type"]
           linked_batch_id: string | null
           created_by: string | null
           updated_by: string | null
           created_at: string
           updated_at: string
+          is_deleted: boolean
         }
         Insert: {
           id?: string
           order_number: string
           customer_name: string
           customer_phone?: string | null
+          location?: string | null
           order_date: string
           total_amount: number
           amount_paid?: number
           balance_due?: number
+          write_off_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           status: Database["public"]["Enums"]["payment_status"]
-          is_deleted?: boolean
+          order_type?: Database["public"]["Enums"]["order_type"]
           linked_batch_id?: string | null
           created_by?: string | null
           updated_by?: string | null
           created_at?: string
           updated_at?: string
+          is_deleted?: boolean
         }
         Update: {
           id?: string
           order_number?: string
           customer_name?: string
           customer_phone?: string | null
+          location?: string | null
           order_date?: string
           total_amount?: number
           amount_paid?: number
           balance_due?: number
+          write_off_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           status?: Database["public"]["Enums"]["payment_status"]
-          is_deleted?: boolean
+          order_type?: Database["public"]["Enums"]["order_type"]
           linked_batch_id?: string | null
           created_by?: string | null
           updated_by?: string | null
           created_at?: string
           updated_at?: string
+          is_deleted?: boolean
         }
       }
       processing_outputs: {
@@ -473,8 +482,9 @@ export interface Database {
       feed_borrow_settlement_method: "RETURNED" | "PURCHASED" | "WRITTEN_OFF"
       feed_type: "STARTER" | "GROWER" | "FINISHER"
       payment_status: "PENDING" | "PARTIAL" | "PAID" | "COMPLIMENTARY"
-      transaction_category: "DOC" | "FEED" | "ORDER" | "EXPENSE" | "OTHER"
+      transaction_category: "DOC" | "FEED" | "ORDER" | "EXPENSE" | "OTHER" | "LOSS"
       transaction_type: "CREDIT" | "DEBIT"
+      order_type: "DRESSED" | "LIVE"
     }
   }
 }

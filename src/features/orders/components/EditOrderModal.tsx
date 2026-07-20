@@ -28,11 +28,12 @@ const orderSchema = z.object({
   orderNumber: z.string().min(1, 'Order number is required'),
   customerName: z.string().min(1, 'Customer name is required'),
   customerPhone: z.string().optional(),
-  location: z.string().optional(), // New location field
+  location: z.string().optional(),
   orderDate: z.string().min(1, 'Order date is required'),
   totalAmount: z.number().min(0, 'Total amount must be non-negative').optional(),
   amountPaid: z.number().min(0, 'Amount paid must be non-negative'),
   installmentPayment: z.number().min(0, 'Installment payment must be non-negative'),
+  writeOffAmount: z.number().min(0, 'Write-off amount must be non-negative'),
   linkedBatchId: z.string().optional(),
   orderItems: z.array(orderItemSchema),
 });
@@ -69,6 +70,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false); // State for showing history
   const [expandedDamage, setExpandedDamage] = useState<Record<number, boolean>>({}); // State for showing damage fields
+  const [showAmountLoss, setShowAmountLoss] = useState(false); // State for showing amount loss write-off
   const [orderType, setOrderType] = useState<'DRESSED' | 'LIVE'>('DRESSED'); // Track order type (read-only)
   const [isComplimentary, setIsComplimentary] = useState(false); // Track complimentary status
   const updateOrder = useUpdateOrder();
@@ -87,6 +89,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
       orderItems: [{ id: '', productId: '', qtyCount: 0, qtyWeight: 0, damagedQtyCount: 0, damagedQtyWeight: 0, damagedReason: '', unitPrice: 0, priceMode: 'COUNT' }],
       amountPaid: 0,
       installmentPayment: 0,
+      writeOffAmount: 0,
     },
   });
 
@@ -108,11 +111,14 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
 
   const amountPaid = watch('amountPaid') || 0;
   const installmentPayment = watch('installmentPayment') || 0;
+  const writeOffAmount = watch('writeOffAmount') || 0;
   const totalPaid = amountPaid + installmentPayment;
+  const effectiveTotal = Math.max(0, totalAmount - writeOffAmount);
   const paymentStatus = isComplimentary ? 'COMPLIMENTARY' :
-                        totalPaid === 0 ? 'PENDING' :
-                        totalPaid < totalAmount ? 'PARTIAL' : 'PAID';
-  const balanceDue = isComplimentary ? 0 : Math.max(0, totalAmount - totalPaid);
+                        totalPaid === 0 && writeOffAmount === 0 ? 'PENDING' :
+                        totalPaid + writeOffAmount >= totalAmount ? 'PAID' :
+                        'PARTIAL';
+  const balanceDue = isComplimentary ? 0 : Math.max(0, totalAmount - totalPaid - writeOffAmount);
 
   useEffect(() => {
     if (isOpen) {
@@ -213,6 +219,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
             totalAmount: data.totalAmount || 0,
             amountPaid: data.amountPaid || 0,
             installmentPayment: 0, // Reset installment payment to 0 for new entries
+            writeOffAmount: data.writeOffAmount || 0,
             linkedBatchId: data.linkedBatchId || '',
             orderItems: preparedOrderItems,
           });
@@ -251,6 +258,7 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
         ...data,
         amountPaid: updatedAmountPaid,
         totalAmount,
+        writeOffAmount: isComplimentary ? 0 : data.writeOffAmount,
         paymentStatus: isComplimentary ? 'COMPLIMENTARY' : undefined,
       };
       // Remove installmentPayment from payload as it's not stored in the database
@@ -555,6 +563,49 @@ export default function EditOrderModal({ isOpen, onClose, onSuccess, orderId }: 
             </p>
           </div>
         </div>
+
+        {/* Amount Loss / Bad Debt Write-off */}
+        {!isComplimentary && (
+          <div className="border border-yellow-200 dark:border-yellow-800 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowAmountLoss(!showAmountLoss)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-yellow-50 dark:bg-yellow-900/10 hover:bg-yellow-100 dark:hover:bg-yellow-900/20 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💰</span>
+                <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Report Amount Loss</span>
+              </div>
+              <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                {showAmountLoss ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            {showAmountLoss && (
+              <div className="p-4 bg-yellow-50/50 dark:bg-yellow-900/5">
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                  Use this when a customer doesn&apos;t fully pay the balance. The written-off amount will be recorded as a loss.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Write-off Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      {...register('writeOffAmount', { valueAsNumber: true })}
+                      className="w-full px-3 py-2 border border-yellow-300 rounded-md text-sm bg-white dark:bg-[#1e293b] text-[#f1f5f9] focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    />
+                  </div>
+                  <div className="flex items-end pb-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Effective balance after write-off: <span className="font-semibold text-yellow-700 dark:text-yellow-300">{formatCurrency(Math.max(0, balanceDue))}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="bg-slate-700 rounded-lg p-4 my-4">
           <div className="text-center">
