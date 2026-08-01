@@ -104,7 +104,7 @@ export default function Reports() {
 
         {/* Key Metrics */}
         {!selectedBatchId && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
             <MetricsCard
               label="Total Income"
               value={formatCurrency(overview?.totalIncome || 0)}
@@ -113,6 +113,11 @@ export default function Reports() {
             <MetricsCard
               label="Total Expenses"
               value={formatCurrency(overview?.totalExpenses || 0)}
+              trend="down"
+            />
+            <MetricsCard
+              label="Total Loss"
+              value={formatCurrency(overview?.totalLoss || 0)}
               trend="down"
             />
             <MetricsCard
@@ -256,6 +261,7 @@ export default function Reports() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Feed (kg)</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Revenue</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Expenses</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Loss</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Profit</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Margin %</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">Dressing %</th>
@@ -265,7 +271,7 @@ export default function Reports() {
                 <tbody className="divide-y divide-gray-200 dark:divide-slate-600">
                   {batches.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-6 py-4 text-center text-gray-500 dark:text-slate-400">
+                      <td colSpan={11} className="px-6 py-4 text-center text-gray-500 dark:text-slate-400">
                         No batches available
                       </td>
                     </tr>
@@ -290,7 +296,7 @@ function BatchSummaryRow({ batchName, report, isLoading }: { batchName: string; 
   if (isLoading || !report) {
     return (
       <tr>
-        <td colSpan={10} className="px-6 py-4 text-center">
+        <td colSpan={11} className="px-6 py-4 text-center">
           <Loading size="small" text="Loading report..." />
         </td>
       </tr>
@@ -305,6 +311,7 @@ function BatchSummaryRow({ batchName, report, isLoading }: { batchName: string; 
       <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-300">{report.totalFeedKg.toFixed(1)}</td>
       <td className="px-6 py-4 text-sm text-green-600 dark:text-green-400 font-medium">{formatCurrency(report.totalRevenue)}</td>
       <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400 font-medium">{formatCurrency(report.totalExpenses)}</td>
+      <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400 font-medium">{formatCurrency(report.totalLoss)}</td>
       <td className={`px-6 py-4 text-sm font-medium ${report.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
         {formatCurrency(report.profit)}
       </td>

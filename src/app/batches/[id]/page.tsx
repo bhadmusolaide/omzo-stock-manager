@@ -13,6 +13,7 @@ import EditBatchModal from '@/features/batches/components/EditBatchModal';
 import ProcessingModal from '@/features/batches/components/ProcessingModal';
 import ProcessingHistoryTable from '@/features/batches/components/ProcessingHistoryTable';
 import FeedUsageModal from '@/components/FeedUsageModal';
+import { BatchCalculator } from '@/features/calculator/components/BatchCalculator';
 import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
 import { calculateEffectiveUnitCost, getEstimatedDailyFeedConsumption, getFeedProjections } from '@/utils/calculations';
@@ -416,11 +417,12 @@ export default function BatchDetail() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="feed">Feed Management</TabsTrigger>
           <TabsTrigger value="growth">Growth Tracking</TabsTrigger>
           <TabsTrigger value="processing">Processing</TabsTrigger>
+          <TabsTrigger value="calculator">Calculator</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -867,6 +869,15 @@ export default function BatchDetail() {
               <ProcessingHistoryTable batchId={batchId} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="calculator" className="mt-4">
+          <BatchCalculator
+            initialBirdCount={batch.docPurchasedCount + batch.docFreeCount}
+            initialMortalityRate={batch.totalMortality > 0
+              ? Math.round((batch.totalMortality / (batch.docPurchasedCount + batch.docFreeCount)) * 100 * 10) / 10
+              : 5}
+          />
         </TabsContent>
       </Tabs>
 

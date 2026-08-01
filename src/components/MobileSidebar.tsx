@@ -13,6 +13,7 @@ import {
   X,
   Boxes,
   Bird,
+  Calculator,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,6 +27,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/batches', label: 'Batches', icon: <Egg size={20} /> },
   { href: '/feed', label: 'Feed', icon: <Leaf size={20} /> },
+  { href: '/batch-calculator', label: 'Calculator', icon: <Calculator size={20} /> },
   { href: '/dressed-inventory', label: 'Dressed Inventory', icon: <Bird size={20} /> },
   { href: '/orders', label: 'Orders', icon: <Package size={20} /> },
   { href: '/transactions', label: 'Transactions', icon: <TrendingUp size={20} /> },

@@ -60,6 +60,13 @@ export async function GET(request: Request) {
       return sum + batchExpenses;
     }, 0);
 
+    const totalLoss = filteredBatches.reduce((sum: number, b: any) => {
+      const batchLoss = (b.transactions || [])
+        .filter((t: any) => t.type === 'DEBIT' && t.category === 'LOSS')
+        .reduce((tSum: number, t: any) => tSum + parseFloat(t.amount || 0), 0);
+      return sum + batchLoss;
+    }, 0);
+
     const overallProfit = totalIncome - totalExpenses;
 
     // Calculate mortality rate (aggregate across all batches)
@@ -115,6 +122,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       totalIncome,
       totalExpenses,
+      totalLoss: parseFloat(totalLoss.toFixed(2)),
       overallProfit,
       mortalityRate: parseFloat(mortalityRate.toFixed(2)),
       avgFeedCostPerKg: parseFloat(avgFeedCostPerKg.toFixed(2)),

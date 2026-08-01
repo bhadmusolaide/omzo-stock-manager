@@ -132,6 +132,20 @@ export const AVIAGEN_AA_INTAKE_OBJ = [
 ];
 
 /**
+ * Aviagen Arbor Acres 2022 As-Hatched Weekly Body Weight Targets (kg)
+ * Key days: 0, 7, 14, 21, 28, 35, 42
+ */
+export const AVIAGEN_AA_WEEKLY_WEIGHT_KG: Record<number, number> = {
+  0: 0.042,
+  7: 0.185,
+  14: 0.480,
+  21: 0.950,
+  28: 1.570,
+  35: 2.280,
+  42: 3.040,
+};
+
+/**
  * Get estimated daily feed consumption based on batch age
  */
 export function getEstimatedDailyFeedConsumption(batch: any): { estimatedConsumptionKg: number; intakeG: number; ageInDays: number } {

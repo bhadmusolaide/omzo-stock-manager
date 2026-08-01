@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 export interface OverviewMetrics {
   totalIncome: number;
   totalExpenses: number;
+  totalLoss: number;
   overallProfit: number;
   mortalityRate: number;
   avgFeedCostPerKg: number;
@@ -33,6 +34,7 @@ export interface BatchReport {
   totalFeedCost: number;
   docCost: number;
   miscExpenses: number;
+  totalLoss: number;
   totalExpenses: number;
   totalRevenue: number;
   profit: number;

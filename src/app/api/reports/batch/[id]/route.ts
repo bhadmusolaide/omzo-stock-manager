@@ -71,6 +71,11 @@ export async function GET(
     const totalExpenses = batch.transactions?.filter((t: any) => t.type === 'DEBIT')
       .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0) || 0;
 
+    // Calculate total loss from LOSS transactions
+    const totalLoss = batch.transactions?.filter((t: any) => 
+      t.type === 'DEBIT' && t.category === 'LOSS')
+      .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0) || 0;
+
     // Calculate DOC cost from transactions
     const docCost = batch.transactions?.filter((t: any) => 
       t.type === 'DEBIT' && t.category === 'DOC')
@@ -156,6 +161,7 @@ export async function GET(
       totalFeedCost,
       docCost,
       miscExpenses,
+      totalLoss: parseFloat(totalLoss.toFixed(2)),
       totalExpenses,
       totalRevenue,
       profit,

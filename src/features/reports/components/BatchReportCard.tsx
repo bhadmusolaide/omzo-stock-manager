@@ -88,7 +88,7 @@ export function BatchReportCard({ report }: BatchReportCardProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-6 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600">
         <div>
           <p className="text-sm text-gray-600 dark:text-slate-400">Revenue</p>
           <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(report.totalRevenue)}</p>
@@ -96,6 +96,10 @@ export function BatchReportCard({ report }: BatchReportCardProps) {
         <div>
           <p className="text-sm text-gray-600 dark:text-slate-400">Expenses</p>
           <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(report.totalExpenses)}</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-600 dark:text-slate-400">Loss</p>
+          <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(report.totalLoss)}</p>
         </div>
         <div>
           <p className="text-sm text-gray-600 dark:text-slate-400">Profit</p>

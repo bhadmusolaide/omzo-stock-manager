@@ -25,6 +25,7 @@ interface Order {
   orderDate: string | null;
   totalAmount: number | null;
   amountPaid: number | null;
+  writeOffAmount: number | null;
   paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' | null;
   orderType?: 'DRESSED' | 'LIVE' | null; // New: order type
   linkedBatchId?: string | null;
@@ -221,7 +222,7 @@ export default function Orders() {
     } },
     { key: "amountPaid", header: "Paid", minWidth: "100px", render: (value: number | null) => formatCurrency(Number(value) || 0) },
     { key: "outstandingBalance", header: "Outstanding", minWidth: "100px", render: (_: unknown, row: Order) => {
-      const outstanding = (Number(row.totalAmount) || 0) - (Number(row.amountPaid) || 0);
+      const outstanding = (Number(row.totalAmount) || 0) - (Number(row.amountPaid) || 0) - (Number(row.writeOffAmount) || 0);
       return formatCurrency(Math.max(0, outstanding));
     } },
     { key: "paymentStatus", header: "Status", minWidth: "80px", render: (value: string | null) => {

@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     // Aggregate totals across ALL orders (not just the paginated page)
     let aggQuery = supabase
       .from('orders')
-      .select('total_amount, amount_paid, customer_name, customer_phone', { count: 'exact' });
+      .select('total_amount, amount_paid, write_off_amount, customer_name, customer_phone', { count: 'exact' });
 
     if (status) aggQuery = aggQuery.eq('payment_status', status);
     if (batchId) aggQuery = aggQuery.eq('linked_batch_id', batchId);
@@ -112,7 +112,8 @@ export async function GET(request: NextRequest) {
 
     const totalRevenue = allOrders?.reduce((sum: number, o: any) => sum + (Number(o.amount_paid) || 0), 0) || 0;
     const totalOrderAmount = allOrders?.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0) || 0;
-    const totalOutstanding = totalOrderAmount - totalRevenue;
+    const totalWriteOff = allOrders?.reduce((sum: number, o: any) => sum + (Number(o.write_off_amount) || 0), 0) || 0;
+    const totalOutstanding = totalOrderAmount - totalRevenue - totalWriteOff;
 
     // Customer metrics across all orders
     const customerMetrics: Record<string, any> = {};
