@@ -73,8 +73,10 @@ export function TabsContent({ value, children, className = '' }: TabsContentProp
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsContent must be used within Tabs');
 
-  if (context.value !== value) return null;
-
-  return <div className={className}>{children}</div>;
+  return (
+    <div className={`${context.value !== value ? 'hidden' : ''} ${className}`}>
+      {children}
+    </div>
+  );
 }
 

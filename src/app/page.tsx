@@ -9,6 +9,7 @@ import Table from '@/components/ui/Table';
 import { formatCurrency } from '@/utils/currency';
 import { DollarSign, TrendingUp, TrendingDown, Users, Percent, Package, CreditCard } from 'lucide-react';
 import PendingPaymentsCarousel from '@/components/PendingPaymentsCarousel';
+import TodaysMedicationWidget from '@/components/TodaysMedicationWidget';
 import AIInsightsWidget from '@/components/AIInsightsWidget';
 
 const transactionColumns = [
@@ -93,6 +94,11 @@ export default function Home() {
 
       {/* Pending Payments Carousel */}
       <PendingPaymentsCarousel />
+
+      {/* Today's Medication Widget */}
+      <div className="mb-6">
+        <TodaysMedicationWidget />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <div className={settings?.showAiInsights !== false ? 'lg:col-span-2' : 'lg:col-span-3'}>

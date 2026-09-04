@@ -11,13 +11,16 @@ interface BatchCalculatorProps {
   initialBirdCount?: number;
   initialMortalityRate?: number;
   showActualInput?: boolean;
+  batchId?: string;
 }
 
 export function BatchCalculator({
   initialBirdCount,
   initialMortalityRate,
   showActualInput = true,
+  batchId,
 }: BatchCalculatorProps) {
+  const storageKey = batchId ?? 'standalone';
   const {
     state,
     projections,
@@ -27,7 +30,7 @@ export function BatchCalculator({
     setMortalityRate,
     setActualFeed,
     resetActualFeed,
-  } = useBatchCalculator(initialBirdCount, initialMortalityRate);
+  } = useBatchCalculator(initialBirdCount, initialMortalityRate, storageKey);
 
   const isLocked = initialBirdCount !== undefined;
   const birdCount = initialBirdCount ?? state.birdCount;

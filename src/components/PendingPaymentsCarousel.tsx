@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertCircle, CreditCard, User, Clock, DollarSign, CheckCircle2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { CreditCard, User, Clock, DollarSign, CheckCircle2, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency } from '@/utils/currency';
 import { usePendingPayments } from '@/hooks/usePendingPayments';
 import { useUpdateOrder } from '@/hooks/useOrders';
@@ -19,216 +19,158 @@ interface PendingOrder {
   orderDate: string;
 }
 
+function getDaysSinceOrder(orderDate: string) {
+  const diffTime = Date.now() - new Date(orderDate).getTime();
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function getRowUrgencyClass(days: number) {
+  if (days >= 15) return 'border-l-red-600 bg-red-50 dark:bg-red-900/10';
+  if (days >= 8) return 'border-l-red-400 bg-red-50/50 dark:bg-red-900/5';
+  if (days >= 3) return 'border-l-amber-400 bg-amber-50/50 dark:bg-amber-900/5';
+  return 'border-l-gray-300 dark:border-l-slate-600';
+}
+
+function getUrgencyLabel(days: number) {
+  if (days >= 15) return { label: 'Overdue', classes: 'text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40' };
+  if (days >= 8) return { label: 'Late', classes: 'text-red-600 dark:text-red-400 bg-red-100/50 dark:bg-red-900/30' };
+  if (days >= 3) return { label: 'Due', classes: 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40' };
+  return { label: 'Recent', classes: 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800' };
+}
+
 const PendingPaymentsCarousel = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+  const [expanded, setExpanded] = useState(true);
   const { data: orders = [], isLoading } = usePendingPayments();
   const updateOrder = useUpdateOrder();
 
-  // Helper function to calculate days since order
-  const getDaysSinceOrder = (orderDate: string) => {
-    const orderDateTime = new Date(orderDate).getTime();
-    const now = new Date().getTime();
-    const diffTime = now - orderDateTime;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  // Filter to only show PENDING and PARTIAL orders
   const pendingOrders = Array.isArray(orders)
     ? orders.filter(order => order.paymentStatus === 'PENDING' || order.paymentStatus === 'PARTIAL')
     : [];
 
-  // Auto-hide carousel when there are no pending orders
-  useEffect(() => {
-    if (pendingOrders.length === 0) {
-      setIsVisible(false);
-    } else if (!isVisible) {
-      setIsVisible(true);
-    }
-  }, [pendingOrders.length, isVisible]);
+  const totalOutstanding = pendingOrders.reduce((sum, o) => sum + o.balanceDue, 0);
 
-  // Auto-advance carousel
-  useEffect(() => {
-    if (pendingOrders.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % pendingOrders.length);
-    }, 6000); // Change slide every 6 seconds
-
-    return () => clearInterval(interval);
-  }, [pendingOrders.length]);
-
-  const handleMarkAsPaid = async (orderId: string) => {
+  const handleMarkAsPaid = async (order: PendingOrder) => {
     try {
-      const order = pendingOrders.find(o => o.id === orderId);
-      if (!order) return;
-
       await updateOrder.mutateAsync({
-        id: orderId,
+        id: order.id,
         data: { amountPaid: order.totalAmount }
       });
-
-      toast.success('Payment status updated successfully');
+      toast.success(`${order.orderNumber} marked as paid`);
     } catch (error) {
       console.error('Error updating payment status:', error);
       toast.error('Failed to update payment status');
     }
   };
 
-  const handleClose = () => {
-    setIsVisible(false);
-  };
-
-  const nextSlide = () => {
-    setCurrentIndex(prev => (prev + 1) % pendingOrders.length);
-  };
-
-  const prevSlide = () => {
-    setCurrentIndex(prev => (prev - 1 + pendingOrders.length) % pendingOrders.length);
-  };
-
-  if (!isVisible || pendingOrders.length === 0) {
-    return null;
-  }
-
   if (isLoading) {
     return (
       <div className="mb-4">
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg p-3 border border-amber-200 dark:border-amber-800">
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 shadow-sm">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-600 animate-spin" />
-            <span className="text-sm text-amber-800 dark:text-amber-200">Loading pending payments...</span>
+            <Clock className="w-4 h-4 text-gray-400 animate-spin" />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Loading pending payments...</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // Get current order to display
-  const currentOrder = pendingOrders[currentIndex];
-  const paymentProgress = ((currentOrder.amountPaid / currentOrder.totalAmount) * 100);
-
-  const daysSinceOrder = getDaysSinceOrder(currentOrder.orderDate);
+  if (pendingOrders.length === 0) return null;
 
   return (
     <div className="mb-4">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-xl shadow-lg overflow-hidden"
+        className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden"
       >
-        <div className="p-4 text-white">
-          {/* Header - Compact */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm">Pending Payments</h3>
-                <p className="text-xs opacity-90">
-                  {pendingOrders.length} outstanding
-                </p>
-              </div>
+        {/* Header */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors border-b border-gray-100 dark:border-slate-700"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-4 h-4 text-red-600 dark:text-red-400" />
             </div>
-            <button
-              onClick={handleClose}
-              className="w-6 h-6 bg-white/20 rounded-md flex items-center justify-center hover:bg-white/30 transition-colors"
-              aria-label="Close"
-            >
-              <X size={14} />
-            </button>
+            <div className="text-left">
+              <h3 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Pending Payments</h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                {pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''} — {formatCurrency(totalOutstanding)} outstanding
+              </p>
+            </div>
           </div>
+          {expanded
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />
+          }
+        </button>
 
-          {/* Main Content - Horizontal Layout */}
-          <AnimatePresence mode="wait">
+        {/* Expandable list */}
+        <AnimatePresence>
+          {expanded && (
             <motion.div
-              key={currentIndex}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white/10 backdrop-blur-sm rounded-lg p-3"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
             >
-              <div className="flex items-center justify-between gap-4">
-                {/* Left side - Order info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CreditCard className="w-4 h-4 opacity-80" />
-                    <span className="font-medium text-sm">{currentOrder.orderNumber}</span>
-                    <span className="text-xs opacity-75">•</span>
-                    <User className="w-4 h-4 opacity-80" />
-                    <span className="text-sm opacity-90 truncate">{currentOrder.customerName}</span>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 opacity-80" />
-                      <span className="opacity-90">{daysSinceOrder} day{daysSinceOrder !== 1 ? 's' : ''} ago</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 opacity-80" />
-                      <span className="font-semibold">{formatCurrency(currentOrder.balanceDue)}</span>
-                    </div>
-                    {currentOrder.paymentStatus === 'PARTIAL' && (
-                      <div className="text-xs opacity-80">
-                        ({formatCurrency(currentOrder.amountPaid)} paid)
+              <div className="p-3 space-y-2">
+                {pendingOrders.map((order, idx) => {
+                  const daysSince = getDaysSinceOrder(order.orderDate);
+                  const urgency = getUrgencyLabel(daysSince);
+                  const paymentProgress = (order.amountPaid / order.totalAmount) * 100;
+                  return (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`rounded-lg border border-gray-200 dark:border-slate-600 border-l-4 bg-white dark:bg-slate-800 p-3 ${getRowUrgencyClass(daysSince)}`}
+                    >
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-slate-100">
+                            <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="font-medium truncate">{order.orderNumber}</span>
+                            <span className="text-gray-300 dark:text-slate-600">•</span>
+                            <User className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate text-gray-600 dark:text-slate-300">{order.customerName}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${urgency.classes}`}>
+                              <Calendar className="w-3 h-3" />
+                              {daysSince}d • {urgency.label}
+                            </span>
+                            <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(order.balanceDue)}</span>
+                            {order.paymentStatus === 'PARTIAL' && (
+                              <span className="text-gray-500 dark:text-slate-400">({formatCurrency(order.amountPaid)} paid)</span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(order); }}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all text-sm flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Mark Paid
+                        </button>
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right side - Action button */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleMarkAsPaid(currentOrder.id)}
-                  className="px-3 py-1.5 bg-white text-orange-600 rounded-lg font-medium hover:bg-opacity-90 transition-all text-sm flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Mark Paid
-                </motion.button>
+                      {order.paymentStatus === 'PARTIAL' && (
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-1.5">
+                            <div className="bg-red-500 rounded-full h-1.5 transition-all duration-500" style={{ width: `${paymentProgress}%` }} />
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </div>
-
-              {/* Progress bar for partial payments */}
-              {currentOrder.paymentStatus === 'PARTIAL' && (
-                <div className="mt-2">
-                  <div className="flex justify-between text-xs mb-1 opacity-90">
-                    <span>Payment Progress</span>
-                    <span>{paymentProgress.toFixed(0)}%</span>
-                  </div>
-                  <div className="w-full bg-white/20 rounded-full h-1.5">
-                    <div
-                      className="bg-white rounded-full h-1.5 transition-all duration-500"
-                      style={{ width: `${paymentProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
             </motion.div>
-          </AnimatePresence>
-
-          {/* Navigation dots - Compact */}
-          {pendingOrders.length > 1 && (
-            <div className="flex justify-center gap-1.5 mt-3">
-              {pendingOrders.map((_, index) => (
-                <motion.button
-                  key={index}
-                  whileHover={{ scale: 1.2 }}
-                  onClick={() => setCurrentIndex(index)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                    currentIndex === index
-                      ? 'bg-white'
-                      : 'bg-white/40 hover:bg-white/60'
-                  }`}
-                  aria-label={`Go to payment ${index + 1}`}
-                />
-              ))}
-            </div>
           )}
-        </div>
+        </AnimatePresence>
       </motion.div>
     </div>
   );

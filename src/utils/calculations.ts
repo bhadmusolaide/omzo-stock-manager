@@ -146,24 +146,23 @@ export const AVIAGEN_AA_WEEKLY_WEIGHT_KG: Record<number, number> = {
 };
 
 /**
+ * Calculate batch age in days from startDate
+ */
+export function getBatchAgeInDays(startDateStr?: string): number {
+  if (!startDateStr) return 0;
+  const startDate = new Date(startDateStr);
+  const today = new Date();
+  startDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  if (today < startDate) return 0;
+  return Math.floor(Math.abs(today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
  * Get estimated daily feed consumption based on batch age
  */
 export function getEstimatedDailyFeedConsumption(batch: any): { estimatedConsumptionKg: number; intakeG: number; ageInDays: number } {
-  // Calculate age in days
-  const startDateStr = batch?.startDate || batch?.placementDate;
-  let ageInDays = 0;
-  if (startDateStr) {
-    const startDate = new Date(startDateStr);
-    const today = new Date();
-    // Reset times to start of day for accurate day calculation
-    startDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    if (today >= startDate) {
-      const diffTime = Math.abs(today.getTime() - startDate.getTime());
-      ageInDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    }
-  }
+  const ageInDays = getBatchAgeInDays(batch?.startDate || batch?.placementDate);
 
   // Cap at max length of our array
   const lookupAge = Math.min(ageInDays, AVIAGEN_AA_INTAKE_OBJ.length - 1);

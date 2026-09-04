@@ -18,6 +18,10 @@ import { useUiStore } from '@/store/ui';
 import { useBatches } from '@/features/batches/hooks/useBatches';
 import { calculateEffectiveUnitCost, getEstimatedDailyFeedConsumption, getFeedProjections } from '@/utils/calculations';
 import { getFeedBorrowStats } from '@/lib/services/feedService';
+import {
+  MEDICATION_SCHEDULE, getPhaseForDay, getUpcomingPhases, getCompletedPhases,
+  getProgramProgress, CATEGORY_COLORS, PROGRAM_END_DAY
+} from '@/lib/healthSchedule';
 import logger from '@/lib/logger';
 
 interface Weighing {
@@ -592,6 +596,115 @@ export default function BatchDetail() {
               </CardContent>
             </Card>
           )}
+
+          {/* Medication Schedule Card */}
+          <Card className="mt-4 border-green-200 dark:border-green-800 shadow-sm">
+            <CardHeader className="bg-green-50/50 dark:bg-green-900/10 border-b border-green-100 dark:border-green-900/50 pb-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-green-800 dark:text-green-300">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.5 5h3M6 20h12"/><path d="M12 3v16"/><path d="M8 8h8l-1 12H9L8 8Z"/></svg>
+                Medication Schedule
+              </CardTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Recommended health program by batch age
+              </p>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {batch.status === 'CLOSED' ? (
+                <p className="text-gray-500 text-center py-4">Batch is closed — medication schedule not applicable.</p>
+              ) : (
+                <>
+                  {estimatedDailyFeed && (
+                    <div className="mb-6">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium text-gray-700 dark:text-slate-300">Program Progress</span>
+                        <span className="text-gray-500">{estimatedDailyFeed.ageInDays} / {PROGRAM_END_DAY} days</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5">
+                        <div
+                          className="bg-gradient-to-r from-green-400 to-green-600 rounded-full h-2.5 transition-all duration-500"
+                          style={{ width: `${getProgramProgress(estimatedDailyFeed.ageInDays)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {estimatedDailyFeed && (() => {
+                    const phase = getPhaseForDay(estimatedDailyFeed.ageInDays);
+                    if (!phase) return estimatedDailyFeed.ageInDays > PROGRAM_END_DAY
+                      ? <div className="text-center py-4 mb-6 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700"><p className="font-semibold text-gray-600 dark:text-slate-400">Program Complete</p></div>
+                      : <div className="text-center py-4 mb-6 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700"><p className="text-sm text-gray-500">No medication scheduled for Day {estimatedDailyFeed.ageInDays}</p></div>;
+                    return (
+                      <div className={`rounded-lg border-2 px-4 py-3 mb-6 ${CATEGORY_COLORS[phase.category]}`}>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wider">Today (Day {estimatedDailyFeed.ageInDays}):</span>
+                            <span className="font-bold text-base">{phase.label}</span>
+                          </div>
+                          {(() => {
+                            const upcoming = getUpcomingPhases(estimatedDailyFeed.ageInDays, 1);
+                            return upcoming.length > 0 ? (
+                              <span className="text-xs opacity-80">
+                                Next: Day {upcoming[0].fromDay}–{upcoming[0].toDay} — {upcoming[0].label.split(' (')[0]}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="space-y-2">
+                    {MEDICATION_SCHEDULE.map((phase, idx) => {
+                      const isPast = estimatedDailyFeed && getCompletedPhases(estimatedDailyFeed.ageInDays).some(
+                        p => p.fromDay === phase.fromDay && p.toDay === phase.toDay
+                      );
+                      const isCurrent = estimatedDailyFeed && getPhaseForDay(estimatedDailyFeed.ageInDays)?.fromDay === phase.fromDay;
+                      return (
+                        <div
+                          key={`${phase.fromDay}-${phase.toDay}`}
+                          className={`flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 ${
+                            isCurrent
+                              ? `${CATEGORY_COLORS[phase.category]} border-2 shadow-sm`
+                              : isPast
+                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 opacity-60'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800'
+                          }`}
+                        >
+                          <div className={`flex-shrink-0 w-16 text-center text-xs font-semibold rounded-full px-2 py-1 ${
+                            isCurrent
+                              ? 'bg-white/80 dark:bg-slate-900/80'
+                              : isPast
+                                ? 'bg-gray-200 dark:bg-slate-700 text-gray-500'
+                                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                          }`}>
+                            D{phase.fromDay}-{phase.toDay}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{phase.label}</div>
+                            {phase.note && (
+                              <p className="text-xs opacity-75 truncate">{phase.note}</p>
+                            )}
+                          </div>
+
+                          {isCurrent && (
+                            <span className="flex-shrink-0 text-xs font-semibold uppercase bg-white/80 dark:bg-slate-900/80 rounded-full px-2 py-0.5">
+                              Now
+                            </span>
+                          )}
+                          {isPast && (
+                            <svg className="w-4 h-4 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="feed" className="mt-4 space-y-4">
@@ -877,6 +990,7 @@ export default function BatchDetail() {
             initialMortalityRate={batch.totalMortality > 0
               ? Math.round((batch.totalMortality / (batch.docPurchasedCount + batch.docFreeCount)) * 100 * 10) / 10
               : 5}
+            batchId={batch.id}
           />
         </TabsContent>
       </Tabs>

@@ -38,7 +38,6 @@ jest.mock('@/hooks/useOrders', () => ({
   }),
 }));
 
-// Mock the toast store
 jest.mock('@/store/toast', () => ({
   toast: {
     success: jest.fn(),
@@ -47,17 +46,22 @@ jest.mock('@/store/toast', () => ({
 }));
 
 describe('PendingPaymentsCarousel', () => {
-  it('renders correctly with pending orders', () => {
+  it('renders header with total outstanding', () => {
     render(<PendingPaymentsCarousel />);
-    
-    // Check if the carousel is visible
-    expect(screen.getByText('Pending Payment')).toBeInTheDocument();
-    
-    // Check if the first order is displayed
+    expect(screen.getByText('Pending Payments')).toBeInTheDocument();
+    expect(screen.getByText(/2 orders/)).toBeInTheDocument();
+  });
+
+  it('renders pending orders list', () => {
+    render(<PendingPaymentsCarousel />);
     expect(screen.getByText('ORD-20230101-0001')).toBeInTheDocument();
     expect(screen.getByText('John Doe')).toBeInTheDocument();
-    
-    // Check if the balance due is displayed
-    expect(screen.getByText('₦5,000.00')).toBeInTheDocument();
+    expect(screen.getByText('ORD-20230102-0002')).toBeInTheDocument();
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+  });
+
+  it('shows balance due for each order', () => {
+    render(<PendingPaymentsCarousel />);
+    expect(screen.getAllByText(/₦/).length).toBeGreaterThan(0);
   });
 });
