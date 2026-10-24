@@ -44,19 +44,15 @@ export async function POST(request: NextRequest) {
       throw fetchError;
     }
 
-    let inventoryId: string | null = null;
-    let newAvailableCount = 0;
-    let newAvailableWeightKg = 0;
-
     if (existingInventory) {
-      inventoryId = existingInventory.id;
+      const inventoryId = existingInventory.id;
       const currentCount = existingInventory.available_count || 0;
       const currentWeight = existingInventory.available_weight_kg || 0;
       const adjustCount = validatedData.adjustmentCount || 0;
       const adjustWeight = validatedData.adjustmentWeightKg || 0;
 
-      newAvailableCount = currentCount + adjustCount;
-      newAvailableWeightKg = currentWeight + adjustWeight;
+      const newAvailableCount = currentCount + adjustCount;
+      const newAvailableWeightKg = currentWeight + adjustWeight;
 
       if (newAvailableCount < 0 || newAvailableWeightKg < 0) {
         return NextResponse.json({
@@ -74,108 +70,92 @@ export async function POST(request: NextRequest) {
         .eq('id', inventoryId);
 
       if (updateError) throw updateError;
-    } else {
-      newAvailableCount = validatedData.adjustmentCount || 0;
-      newAvailableWeightKg = validatedData.adjustmentWeightKg || 0;
 
-      if (newAvailableCount < 0 || newAvailableWeightKg < 0) {
-        return NextResponse.json({ error: 'Cannot create negative inventory' }, { status: 400 });
-      }
-
-      const insertPayload = {
-        product_type: validatedData.productType,
-        batch_id: validatedData.batchId || null,
-        available_count: newAvailableCount,
-        available_weight_kg: newAvailableWeightKg,
-        unit_price: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { data: newInventory, error: insertError } = await supabase
-        .from('dressed_inventory')
-        .insert(insertPayload)
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      inventoryId = newInventory.id;
-    }
-
-    // Cleanup: when an assigned entry exists, soft-delete any orphaned NULL-batch_id rows for same product_type
-    if (validatedData.batchId) {
-      const { data: orphaned } = await supabase
-        .from('dressed_inventory')
-        .select('id')
-        .eq('product_type', validatedData.productType)
-        .is('batch_id', null)
-        .eq('is_deleted', false);
-
-      if (orphaned && orphaned.length > 0) {
-        await supabase
+      // Safety net: when adjusting an assigned entry, soft-delete any orphaned
+      // NULL-batch_id rows for the same product_type (legacy data cleanup)
+      if (validatedData.batchId) {
+        const { data: orphaned } = await supabase
           .from('dressed_inventory')
-          .update({ is_deleted: true, updated_at: new Date().toISOString() })
-          .in('id', orphaned.map((r: { id: string }) => r.id));
-      }
-    }
-
-    const { data: updatedInventory, error: finalError } = await supabase
-      .from('dressed_inventory')
-      .select('*')
-      .eq('id', inventoryId)
-      .single();
-
-    if (finalError) throw finalError;
-
-    const transformedInventory = {
-      id: updatedInventory.id,
-      productType: updatedInventory.product_type,
-      batchId: updatedInventory.batch_id,
-      availableCount: updatedInventory.available_count,
-      availableWeightKg: updatedInventory.available_weight_kg,
-      unitPrice: updatedInventory.unit_price,
-      createdAt: updatedInventory.created_at,
-      updatedAt: updatedInventory.updated_at,
-    };
-
-    if (updatedInventory.batch_id) {
-      const batchId = updatedInventory.batch_id;
-      const { data: batchData } = await supabase
-        .from('batches')
-        .select('current_live, status')
-        .eq('id', batchId)
-        .single();
-
-      if (batchData && batchData.status !== 'CLOSED') {
-        const currentLive = batchData.current_live || 0;
-
-        const { data: dressedInventory } = await supabase
-          .from('dressed_inventory')
-          .select('available_count, available_weight_kg')
-          .eq('batch_id', batchId)
+          .select('id')
+          .eq('product_type', validatedData.productType)
+          .is('batch_id', null)
           .eq('is_deleted', false);
 
-        const totalDressedCount = dressedInventory?.reduce((sum, item) => sum + (item.available_count || 0), 0) || 0;
-        const totalDressedWeight = dressedInventory?.reduce((sum, item) => sum + (item.available_weight_kg || 0), 0) || 0;
-
-        if (currentLive <= 0 && totalDressedCount <= 0 && totalDressedWeight <= 0) {
+        if (orphaned && orphaned.length > 0) {
           await supabase
-            .from('batches')
-            .update({
-              status: 'CLOSED',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', batchId);
-
-          console.log(`Auto-closed batch ${batchId} after manual adjustment as inventory is empty.`);
+            .from('dressed_inventory')
+            .update({ is_deleted: true, updated_at: new Date().toISOString() })
+            .in('id', orphaned.map((r: { id: string }) => r.id));
         }
       }
+
+      const { data: updatedInventory, error: finalError } = await supabase
+        .from('dressed_inventory')
+        .select('*')
+        .eq('id', inventoryId)
+        .single();
+
+      if (finalError) throw finalError;
+
+      const transformedInventory = {
+        id: updatedInventory.id,
+        productType: updatedInventory.product_type,
+        batchId: updatedInventory.batch_id,
+        availableCount: updatedInventory.available_count,
+        availableWeightKg: updatedInventory.available_weight_kg,
+        unitPrice: updatedInventory.unit_price,
+        createdAt: updatedInventory.created_at,
+        updatedAt: updatedInventory.updated_at,
+      };
+
+      // Auto-close batch if inventory is now empty
+      if (updatedInventory.batch_id) {
+        const batchId = updatedInventory.batch_id;
+        const { data: batchData } = await supabase
+          .from('batches')
+          .select('current_live, status')
+          .eq('id', batchId)
+          .single();
+
+        if (batchData && batchData.status !== 'CLOSED') {
+          const currentLive = batchData.current_live || 0;
+
+          const { data: dressedInventory } = await supabase
+            .from('dressed_inventory')
+            .select('available_count, available_weight_kg')
+            .eq('batch_id', batchId)
+            .eq('is_deleted', false);
+
+          const totalDressedCount = dressedInventory?.reduce((sum, item) => sum + (item.available_count || 0), 0) || 0;
+          const totalDressedWeight = dressedInventory?.reduce((sum, item) => sum + (item.available_weight_kg || 0), 0) || 0;
+
+          if (currentLive <= 0 && totalDressedCount <= 0 && totalDressedWeight <= 0) {
+            await supabase
+              .from('batches')
+              .update({
+                status: 'CLOSED',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', batchId);
+
+            console.log(`Auto-closed batch ${batchId} after manual adjustment as inventory is empty.`);
+          }
+        }
+      }
+
+      return NextResponse.json({
+        message: 'Inventory adjusted successfully',
+        inventory: transformedInventory,
+      });
     }
 
+    // Product types can only be created through batch processing.
+    // Manual adjustments are only allowed on existing inventory items.
     return NextResponse.json({
-      message: 'Inventory adjusted successfully',
-      inventory: transformedInventory,
-    });
+      error: `No existing inventory found for "${validatedData.productType}"${
+        validatedData.batchId ? ` in batch ${validatedData.batchId}` : ''
+      }. Product types can only be created through batch processing.`,
+    }, { status: 404 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });

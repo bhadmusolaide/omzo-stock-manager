@@ -34,23 +34,13 @@ interface AdjustInventoryForm {
   reason?: string;
 }
 
-// Add interface for new product form
-interface NewProductForm {
-  productType: string;
-  batchId?: string;
-  initialCount?: number;
-  initialWeightKg?: number;
-}
-
 export default function DressedInventoryPage() {
   const [inventory, setInventory] = useState<DressedInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
-  const [showNewProductModal, setShowNewProductModal] = useState(false); // Add state for new product modal
   const [selectedItem, setSelectedItem] = useState<DressedInventoryItem | null>(null);
   const [adjustForm, setAdjustForm] = useState<AdjustInventoryForm>({ productType: '' });
-  const [newProductForm, setNewProductForm] = useState<NewProductForm>({ productType: '' }); // Add state for new product form
   const [showClosedBatches, setShowClosedBatches] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [batchSummaries, setBatchSummaries] = useState<Record<string, any>>({});
@@ -120,37 +110,6 @@ export default function DressedInventoryPage() {
     } catch (error) {
       console.error('Error adjusting inventory:', error); // Log the error
       toast.error('Failed to adjust inventory');
-    }
-  };
-
-  const handleCreateNewProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await fetch('/api/dressed_inventory/adjust', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productType: newProductForm.productType,
-          batchId: newProductForm.batchId,
-          adjustmentCount: newProductForm.initialCount,
-          adjustmentWeightKg: newProductForm.initialWeightKg,
-          reason: 'Initial product creation',
-        }),
-      });
-
-      if (response.ok) {
-        toast.success('New product type created successfully');
-        setShowNewProductModal(false);
-        setNewProductForm({ productType: '' });
-        fetchInventory();
-      } else {
-        const err = await response.json();
-        toast.error(err.error || 'Failed to create new product type');
-      }
-    } catch (error) {
-      console.error('Error creating new product type:', error); // Log the error
-      toast.error('Failed to create new product type');
     }
   };
 
@@ -262,14 +221,13 @@ export default function DressedInventoryPage() {
                </svg>
                Processing History
              </Button>
-             <Button
-               variant="outline"
-               onClick={() => setShowClosedBatches(!showClosedBatches)}
-             >
-               {showClosedBatches ? 'Hide Closed Batches' : 'Show Closed Batches'}
-             </Button>
-             <Button onClick={() => setShowNewProductModal(true)}>Create New Product Type</Button>
-           </div>
+<Button
+                variant="outline"
+                onClick={() => setShowClosedBatches(!showClosedBatches)}
+              >
+                {showClosedBatches ? 'Hide Closed Batches' : 'Show Closed Batches'}
+              </Button>
+            </div>
          </div>
 
          {/* Summary Cards */}
@@ -352,47 +310,6 @@ export default function DressedInventoryPage() {
           </div>
         )}
       </div>
-
-      {/* New Product Modal */}
-      {showNewProductModal && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/60 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md mx-4 bg-white dark:bg-slate-800">
-            <CardHeader>
-              <CardTitle className="text-gray-900 dark:text-slate-100">Create New Product Type</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <form onSubmit={handleCreateNewProduct} className="space-y-4">
-                <Input
-                  label="Product Type Name"
-                  value={newProductForm.productType || ''}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, productType: e.target.value })}
-                  placeholder="e.g., breast-fillets, wings, etc."
-                  required
-                />
-                <Input
-                  label="Initial Count (optional)"
-                  type="number"
-                  value={newProductForm.initialCount || ''}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, initialCount: parseInt(e.target.value) || undefined })}
-                />
-                <Input
-                  label="Initial Weight (kg) (optional)"
-                  type="number"
-                  step="0.001"
-                  value={newProductForm.initialWeightKg || ''}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, initialWeightKg: parseFloat(e.target.value) || undefined })}
-                />
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setShowNewProductModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Create Product Type</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Adjust Modal */}
       {showAdjustModal && selectedItem && (

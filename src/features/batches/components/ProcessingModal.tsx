@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/utils/currency';
 import { allocateCostsToProcessing, calculateDressingPercentage, calculateAvgDressedWeightPerBird, calculateCostPerDressedKg, AllocationMode } from '@/utils/calculations';
+import { DEFAULT_PRODUCT_TYPES } from '@/lib/productTypes';
 
 const processingSchema = z.object({
   liveBirdsProcessed: z.number().int().min(1, 'Live birds processed must be at least 1'),
@@ -37,27 +38,6 @@ interface ProcessingModalProps {
   lastAvgWeightKg?: number;
 }
 
-interface DressedInventoryItem {
-  id: string;
-  productType: string;
-  batchId: string | null;
-  batchName: string;
-  availableCount: number;
-  availableWeightKg: number;
-  unitPrice: number;
-  createdAt: string;
-  updatedAt: string;
-  lowStock: boolean;
-}
-
-// Remove hardcoded presets
-// const DRESSING_PRESETS = {
-//   whole: { percentage: 0.70, productType: 'whole' },
-//   quarter: { percentage: 0.20, productType: 'quarter' },
-//   combo: { percentage: 0.10, productType: 'dogfood_combo' },
-//   // Add more as needed
-// };
-
 export default function ProcessingModal({
   isOpen,
   onClose,
@@ -70,8 +50,11 @@ export default function ProcessingModal({
   lastAvgWeightKg = 0,
 }: ProcessingModalProps) {
   const [preview, setPreview] = useState<any>(null);
-  const [productTypes, setProductTypes] = useState<string[]>([]);
   const queryClient = useQueryClient();
+
+  // Use the canonical/default product types — these are final and
+  // are only ever created through batch processing.
+  const productTypes = DEFAULT_PRODUCT_TYPES;
 
   const {
     register,
@@ -101,37 +84,8 @@ export default function ProcessingModal({
   const totalLiveWeightForProcessing = watchedLiveBirds * watchedAvgLiveWeight;
   const totalDressedWeightKg = watchedYieldMap.reduce((sum, item) => sum + item.totalWeightKg, 0);
 
-  // Fetch product types from dressed inventory
   useEffect(() => {
-    const fetchProductTypes = async () => {
-      try {
-        const response = await fetch('/api/dressed_inventory');
-        if (response.ok) {
-          const data = await response.json();
-          const inventoryItems: DressedInventoryItem[] = data.inventory || data;
-          // Extract unique product types
-          const uniqueProductTypes = Array.from(new Set(inventoryItems.map(item => item.productType)));
-          setProductTypes(uniqueProductTypes);
-          
-          // Set default product type to first available if exists
-          if (uniqueProductTypes.length > 0 && fields.length > 0) {
-            setValue(`yieldMap.0.productType`, uniqueProductTypes[0]);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching product types:', error);
-        // Fallback to hardcoded values if API fails
-        setProductTypes(['whole', 'quarter', 'Dog Food (Liver, Head, etc)', 'gizzards', 'liver', 'hearts', 'feet']);
-      }
-    };
-
-    if (isOpen) {
-      fetchProductTypes();
-    }
-  }, [isOpen, fields.length, setValue]);
-
-  useEffect(() => {
-    // Auto-suggest yields based on presets (simplified)
+    // Auto-suggest yields based on a simple distribution
     if (watchedLiveBirds > 0 && totalDressedWeightKg === 0 && productTypes.length > 0) {
       const suggestedYield = productTypes.slice(0, 3).map((type, index) => ({
         productType: type,
