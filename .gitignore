@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+build.log
+supabase/.temp/
+.idea/
+.vscode/
 
 # debug
 npm-debug.log*
@@ -54,5 +58,3 @@ next-env.d.ts
 *.md
 !README.md
 *.sql
-!schema.sql
-.vercel
